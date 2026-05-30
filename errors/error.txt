@@ -98,3 +98,98 @@
 [WARN] [1780108656.126237]: set_z timeout at 30 cm
 [INFO] [1780108659.132131]: Current state: FINISH
 [INFO] [1780108659.133033]: Mission finished
+
+/opt/ros/noetic/lib/python3/dist-packages/rospy/topics.py:563: UserWarning: '512/image_raw' is not a legal ROS graph resource name. This may cause problems with other ROS tools
+  super(Subscriber, self).__init__(name, data_class, Registration.SUB)
+/opt/ros/noetic/lib/python3/dist-packages/rospy/topics.py:563: UserWarning: '512/pose' is not a legal ROS graph resource name. This may cause problems with other ROS tools
+  super(Subscriber, self).__init__(name, data_class, Registration.SUB)
+/opt/ros/noetic/lib/python3/dist-packages/rospy/topics.py:842: UserWarning: '512/sdk_cmd' is not a legal ROS graph resource name. This may cause problems with other ROS tools
+  super(Publisher, self).__init__(name, data_class, Registration.PUB)
+/opt/ros/noetic/lib/python3/dist-packages/rospy/topics.py:842: UserWarning: '512/judge' is not a legal ROS graph resource name. This may cause problems with other ROS tools
+  super(Publisher, self).__init__(name, data_class, Registration.PUB)
+[INFO] [1780109515.694433]: Current state: TAKEOFF
+[INFO] [1780109518.700563]: Initial height: 0.00m
+[INFO] [1780109518.703532]: Taking off...
+[INFO] [1780109520.708161]: Takeoff confirmed, height=0.48m (delta=0.48m)
+[INFO] [1780109520.711661]: Waiting for service: /512/set_downvision
+[ERROR] [1780109520.727484]: Downvision enable failed: Set Downvision: True
+[INFO] [1780109520.729457]: Current state: LANDING
+[INFO] [1780109520.731198]: Landing...
+[INFO] [1780109520.732919]: Going to (470, 470) cm
+[INFO] [1780109520.734843]: turn_to: yaw=-15.0  target=44.5  err=59.5  step=20  dir=ccw
+[INFO] [1780109521.338259]: turn_to: yaw=-14.0  target=44.5  err=58.5  step=20  dir=ccw
+[INFO] [1780109521.943190]: turn_to: yaw=-14.0  target=44.5  err=58.5  step=20  dir=ccw
+[INFO] [1780109522.546459]: turn_to: yaw=-14.0  target=44.5  err=58.5  step=20  dir=ccw
+[INFO] [1780109523.151127]: turn_to: yaw=-15.0  target=44.5  err=59.5  step=20  dir=ccw
+[INFO] [1780109523.755588]: turn_to: yaw=0.0  target=44.5  err=44.5  step=20  dir=ccw
+[INFO] [1780109524.359023]: turn_to: yaw=6.0  target=44.5  err=38.5  step=20  dir=ccw
+[INFO] [1780109524.961521]: turn_to: yaw=20.0  target=44.5  err=24.5  step=20  dir=ccw
+[INFO] [1780109525.567074]: turn_to: yaw=33.0  target=44.5  err=11.5  step=11  dir=ccw
+[INFO] [1780109526.172084]: turn_to: yaw=39.0  target=44.5  err=5.5  step=5  dir=ccw
+[INFO] [1780109526.777246]: turn_to: yaw=57.0  target=44.5  err=-12.5  step=12  dir=cw
+[INFO] [1780109527.381495]: turn_to: yaw=60.0  target=44.5  err=-15.5  step=15  dir=cw
+[INFO] [1780109527.987618]: turn_to: yaw=55.0  target=44.5  err=-10.5  step=10  dir=cw
+[INFO] [1780109529.627826]: turn_to: yaw=32.0  target=44.2  err=12.2  step=12  dir=ccw
+[INFO] [1780109530.233435]: turn_to: yaw=31.0  target=44.2  err=13.2  step=13  dir=ccw
+[INFO] [1780109530.837192]: turn_to: yaw=31.0  target=44.2  err=13.2  step=13  dir=ccw
+[INFO] [1780109531.440193]: turn_to: yaw=32.0  target=44.2  err=12.2  step=12  dir=ccw
+[INFO] [1780109532.711004]: turn_to: yaw=52.0  target=44.8  err=-7.2  step=7  dir=cw
+[INFO] [1780109533.314775]: turn_to: yaw=61.0  target=44.8  err=-16.2  step=16  dir=cw
+[INFO] [1780109533.920687]: turn_to: yaw=63.0  target=44.8  err=-18.2  step=18  dir=cw
+[INFO] [1780109534.525776]: turn_to: yaw=63.0  target=44.8  err=-18.2  step=18  dir=cw
+[INFO] [1780109535.130233]: turn_to: yaw=63.0  target=44.8  err=-18.2  step=18  dir=cw
+[INFO] [1780109535.735196]: turn_to: yaw=53.0  target=44.8  err=-8.2  step=8  dir=cw
+[INFO] [1780109537.005825]: turn_to: yaw=34.0  target=44.5  err=10.5  step=10  dir=ccw
+[INFO] [1780109537.611237]: turn_to: yaw=28.0  target=44.5  err=16.5  step=16  dir=ccw
+[INFO] [1780109538.216351]: turn_to: yaw=26.0  target=44.5  err=18.5  step=18  dir=ccw
+[INFO] [1780109538.821567]: turn_to: yaw=26.0  target=44.5  err=18.5  step=18  dir=ccw
+[INFO] [1780109539.426303]: turn_to: yaw=26.0  target=44.5  err=18.5  step=18  dir=ccw
+[INFO] [1780109540.030535]: turn_to: yaw=36.0  target=44.5  err=8.5  step=8  dir=ccw
+[INFO] [1780109541.006902]: turn_to: yaw=55.0  target=45.0  err=-10.0  step=10  dir=cw
+[INFO] [1780109541.612495]: turn_to: yaw=57.0  target=45.0  err=-12.0  step=12  dir=cw
+[INFO] [1780109542.217275]: turn_to: yaw=57.0  target=45.0  err=-12.0  step=11  dir=cw
+[INFO] [1780109542.820607]: turn_to: yaw=57.0  target=45.0  err=-12.0  step=12  dir=cw
+[INFO] [1780109543.423951]: turn_to: yaw=56.0  target=45.0  err=-11.0  step=11  dir=cw
+[INFO] [1780109545.063927]: turn_to: yaw=38.0  target=44.7  err=6.7  step=6  dir=ccw
+[INFO] [1780109545.673701]: turn_to: yaw=38.0  target=44.7  err=6.7  step=6  dir=ccw
+[INFO] [1780109546.279142]: turn_to: yaw=38.0  target=44.7  err=6.7  step=6  dir=ccw
+[WARN] [1780109551.256546]: goto_xy timeout at (470, 470)
+[INFO] [1780109551.260346]: Setting height: delta=-48.0 cm  (from 78.0 to 30.0 cm)
+[WARN] [1780109566.289946]: move_z timeout: delta=-48.0 cm  current=78.0 target=30.0
+[INFO] [1780109569.295194]: Current state: FINISH
+[INFO] [1780109569.301596]: Mission finished
+[INFO] [1780109569.304029]: Tello Name: 512
+[INFO] [1780109569.305773]: Current state: TAKEOFF
+[INFO] [1780109570.209102]: Initial height: 0.94m
+[INFO] [1780109570.215179]: Taking off...
+[INFO] [1780109579.730141]: Takeoff confirmed, height=1.70m (delta=0.76m)
+[INFO] [1780109579.732951]: Waiting for service: /512/set_downvision
+[ERROR] [1780109579.748438]: Downvision enable failed: Set Downvision: True
+[INFO] [1780109579.750468]: Current state: LANDING
+[INFO] [1780109579.752438]: Landing...
+[INFO] [1780109579.754011]: Going to (470, 470) cm
+[INFO] [1780109579.757256]: turn_to: yaw=111.0  target=62.6  err=-48.4  step=20  dir=cw
+[INFO] [1780109580.260195]: turn_to: yaw=114.0  target=62.6  err=-51.4  step=20  dir=cw
+[INFO] [1780109580.764638]: turn_to: yaw=114.0  target=62.6  err=-51.4  step=20  dir=cw
+[INFO] [1780109581.268895]: turn_to: yaw=114.0  target=62.6  err=-51.4  step=20  dir=cw
+[INFO] [1780109581.773132]: turn_to: yaw=83.0  target=62.6  err=-20.4  step=20  dir=cw
+[INFO] [1780109582.278340]: turn_to: yaw=83.0  target=62.6  err=-20.4  step=20  dir=cw
+[INFO] [1780109582.781303]: turn_to: yaw=83.0  target=62.6  err=-20.4  step=20  dir=cw
+[INFO] [1780109583.284891]: turn_to: yaw=170.0  target=62.6  err=-107.4  step=20  dir=cw
+[INFO] [1780109583.788229]: turn_to: yaw=170.0  target=62.6  err=-107.4  step=20  dir=cw
+[INFO] [1780109584.291403]: turn_to: yaw=170.0  target=62.6  err=-107.4  step=20  dir=cw
+[INFO] [1780109584.793385]: turn_to: yaw=170.0  target=62.6  err=-107.4  step=20  dir=cw
+[INFO] [1780109585.295180]: turn_to: yaw=170.0  target=62.6  err=-107.4  step=20  dir=cw
+[INFO] [1780109585.797041]: turn_to: yaw=83.0  target=62.6  err=-20.4  step=20  dir=cw
+[INFO] [1780109586.299728]: turn_to: yaw=83.0  target=62.6  err=-20.4  step=20  dir=cw
+[INFO] [1780109586.804534]: turn_to: yaw=83.0  target=62.6  err=-20.4  step=20  dir=cw
+[INFO] [1780109587.308553]: turn_to: yaw=83.0  target=62.6  err=-20.4  step=20  dir=cw
+[INFO] [1780109587.812520]: turn_to: yaw=83.0  target=62.6  err=-20.4  step=20  dir=cw
+[INFO] [1780109588.316679]: turn_to: yaw=83.0  target=62.6  err=-20.4  step=20  dir=cw
+[INFO] [1780109588.821297]: turn_to: yaw=83.0  target=62.6  err=-20.4  step=20  dir=cw
+[INFO] [1780109589.325623]: turn_to: yaw=83.0  target=62.6  err=-20.4  step=20  dir=cw
+[WARN] [1780109589.830444]: turn_to timeout at 62.58648378979239 deg
+[INFO] [1780109589.833122]: Setting height to 30 cm
+[WARN] [1780109605.054120]: set_z timeout at 30 cm
+[INFO] [1780109608.059027]: Current state: FINISH
+[INFO] [1780109608.062259]: Mission finished
