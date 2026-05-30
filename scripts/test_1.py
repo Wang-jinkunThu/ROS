@@ -382,13 +382,24 @@ class Mission:
     def do_takeoff(self):
         rospy.loginfo("Taking off...")
         self.uav.takeoff()
-        rospy.sleep(3)
 
+        # 等待起飞完成（position.z > 0.3m 说明已离地）
+        deadline = rospy.Time.now() + rospy.Duration(15)
+        while not rospy.is_shutdown():
+            with self.uav.state.lock:
+                pz = self.uav.state.position.z if self.uav.state.position else 0
+            if pz > 0.3:
+                rospy.loginfo(f"Takeoff confirmed, height={pz:.2f}m")
+                break
+            if rospy.Time.now() > deadline:
+                rospy.logerr("Takeoff timeout: drone not airborne")
+                self.state = "LANDING"
+                return
+            rospy.sleep(0.5)
+
+        # 启用下视视觉定位
         drone_name = self.uav.state.name
-        if drone_name:
-            service_name = f"/{drone_name}/set_downvision"
-        else:
-            service_name = "/set_downvision"
+        service_name = f"/{drone_name}/set_downvision" if drone_name else "/set_downvision"
         rospy.loginfo(f"Waiting for service: {service_name}")
         rospy.wait_for_service(service_name)
         try:
@@ -397,9 +408,28 @@ class Mission:
             if resp.success:
                 rospy.loginfo("Downvision enabled successfully")
             else:
-                rospy.logwarn(f"Downvision enable failed: {resp.message}")
+                rospy.logerr(f"Downvision enable failed: {resp.message}")
+                self.state = "LANDING"
+                return
         except Exception as e:
             rospy.logerr(f"Failed to call downvision service: {e}")
+            self.state = "LANDING"
+            return
+
+        # 等待定位数据就绪
+        rospy.loginfo("Waiting for position data...")
+        deadline = rospy.Time.now() + rospy.Duration(10)
+        while not rospy.is_shutdown():
+            with self.uav.state.lock:
+                ok = self.uav.state.position is not None and self.uav.state.yaw is not None
+            if ok:
+                rospy.loginfo("Position data ready")
+                break
+            if rospy.Time.now() > deadline:
+                rospy.logerr("Timeout waiting for position data")
+                self.state = "LANDING"
+                return
+            rospy.sleep(0.5)
 
         self.state = "BALL"
 

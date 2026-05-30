@@ -1,0 +1,7 @@
+[INFO] [1780106983.573220]: Current state: TAKEOFF
+[INFO] [1780106983.576345]: Taking off...
+[INFO] [1780106986.581906]: Waiting for service: /512/set_downvision
+[WARN] [1780106986.597532]: Downvision enable failed: Set Downvision: True
+[INFO] [1780106986.599315]: Current state: BALL
+[INFO] [1780106986.600876]: Going to (150, 125) cm
+
