@@ -107,7 +107,7 @@ class TelloControl:
 
             target_rad = math.atan2(dy, dx)
             target_deg = math.degrees(target_rad)
-            if not self.turn_to(target_deg, tol_deg=5, timeout=5):
+            if not self.turn_to(target_deg, tol_deg=5, timeout=10):
                 return False
 
             step = min(dist, 20.0)
@@ -141,6 +141,7 @@ class TelloControl:
                 self.stop()
                 return True
             step = min(int(abs(err)), 20)
+            rospy.loginfo(f"turn_to: yaw={yaw:.1f}  target={target_yaw_deg:.1f}  err={err:.1f}  step={step}  dir={'ccw' if err > 0 else 'cw'}")
             if err > 0:
                 self.ccw(step)
             else:
@@ -444,9 +445,18 @@ class Mission:
         self.state = "BALL"
 
     def ball(self):
-        self.uav.goto_xy(150, 125)
-        self.uav.set_z(70)
-        self.uav.turn_to(0)
+        if not self.uav.goto_xy(150, 125):
+            rospy.logerr("Failed to reach rotating ball observation point")
+            self.state = "LANDING"
+            return
+        if not self.uav.set_z(70):
+            rospy.logerr("Failed to set height for rotating ball")
+            self.state = "LANDING"
+            return
+        if not self.uav.turn_to(0):
+            rospy.logerr("Failed to turn to rotating ball")
+            self.state = "LANDING"
+            return
 
         ball1_color = self.uav.wait_for_ball(timeout=10)
         if ball1_color is None:
@@ -454,9 +464,11 @@ class Mission:
             ball1_color = '?'
         rospy.loginfo(f"Rotating ball color: {ball1_color}")
 
-        self.uav.goto_xy(150, 50)
-        self.uav.goto_xy(200, 50)
-        self.uav.goto_xy(310, 125)
+        for pt in [(150, 50), (200, 50), (310, 125)]:
+            if not self.uav.goto_xy(*pt):
+                rospy.logerr(f"Failed to reach waypoint {pt}")
+                self.state = "LANDING"
+                return
 
         ball2_color = self.uav.wait_for_ball(timeout=5)
         if ball2_color is None:

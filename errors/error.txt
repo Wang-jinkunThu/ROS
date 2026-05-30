@@ -15,3 +15,17 @@
 [INFO] [1780107598.855034]: Current state: BALL
 [INFO] [1780107598.856577]: Going to (150, 125) cm
 
+[INFO] [1780107951.455825]: Current state: TAKEOFF
+[INFO] [1780107954.461071]: Initial height: 0.00m
+[INFO] [1780107954.462015]: Taking off...
+[INFO] [1780107956.969258]: Takeoff confirmed, height=0.68m (delta=0.68m)
+[INFO] [1780107956.972685]: Waiting for service: /512/set_downvision
+[INFO] [1780107957.006654]: Downvision enabled successfully
+[INFO] [1780107957.008053]: Waiting for position data...
+[INFO] [1780107957.009051]: Position data ready
+[INFO] [1780107957.010126]: Current state: BALL
+[INFO] [1780107957.010876]: Going to (150, 125) cm
+[WARN] [1780107962.021300]: turn_to timeout at 42.15338308418389 deg
+[INFO] [1780107962.024756]: Setting height to 70 cm
+[WARN] [1780107977.249027]: set_z timeout at 70 cm
+
