@@ -112,8 +112,7 @@ class TelloControl:
 
             step = min(dist, 20.0)
             self.forward(int(step))
-            rospy.sleep(max(0.5, step / 20.0))
-            rate.sleep()
+            rospy.sleep(max(0.3, step / 30.0))
 
     def turn_to(self, target_yaw_deg, tol_deg=5, timeout=10):
         """
@@ -141,25 +140,37 @@ class TelloControl:
                 self.stop()
                 return True
             step = min(int(abs(err)), 20)
-            rospy.loginfo(f"turn_to: yaw={yaw:.1f}  target={target_yaw_deg:.1f}  err={err:.1f}  step={step}  dir={'ccw' if err > 0 else 'cw'}")
+            rospy.loginfo_throttle(0.5, f"turn_to: yaw={yaw:.1f}  target={target_yaw_deg:.1f}  err={err:.1f}  step={step}  dir={'ccw' if err > 0 else 'cw'}")
             if err > 0:
                 self.ccw(step)
             else:
                 self.cw(step)
-            rospy.sleep(0.5)
-            rate.sleep()
+            rospy.sleep(0.3)
 
-    def set_z(self, target_z_cm, tol_cm=5, timeout=15):
-        """
-        闭环上升到指定高度（cm），成功返回 True。
-        """
+    def move_z(self, delta_cm, tol_cm=5, timeout=15):
+        """z 方向上移动相对高度，delta_cm > 0 上升，< 0 下降，成功返回 True。"""
         rate = rospy.Rate(10)
         deadline = rospy.Time.now() + rospy.Duration(timeout)
-        rospy.loginfo(f"Setting height to {target_z_cm} cm")
+
+        # 记录起始高度
+        init_z = None
+        for _ in range(10):
+            with self.state.lock:
+                if self.state.position is not None:
+                    init_z = self.state.position.z * 100.0
+                    break
+            rospy.sleep(0.2)
+
+        if init_z is None:
+            rospy.logerr("move_z: cannot get initial height")
+            return False
+
+        target_z = init_z + delta_cm
+        rospy.loginfo(f"Setting height: delta={delta_cm} cm  (from {init_z:.1f} to {target_z:.1f} cm)")
 
         while not rospy.is_shutdown():
             if rospy.Time.now() > deadline:
-                rospy.logwarn(f"set_z timeout at {target_z_cm} cm")
+                rospy.logwarn(f"move_z timeout: delta={delta_cm} cm  current={pz:.1f} target={target_z:.1f}")
                 return False
 
             with self.state.lock:
@@ -168,9 +179,9 @@ class TelloControl:
                     continue
                 pz = self.state.position.z * 100.0
 
-            dz = target_z_cm - pz
+            dz = target_z - pz
             if abs(dz) < tol_cm:
-                rospy.loginfo(f"Reached height {target_z_cm} cm")
+                rospy.loginfo(f"Reached height {pz:.1f} cm")
                 self.stop()
                 return True
 
@@ -180,13 +191,13 @@ class TelloControl:
                     self.up(step)
                 else:
                     self.down(step)
-                rospy.sleep(0.8)
+                rospy.sleep(0.6)
             else:
                 if dz > 0:
                     self.up(int(abs(dz)))
                 else:
                     self.down(int(abs(dz)))
-                rospy.sleep(0.5)
+                rospy.sleep(0.3)
 
     # ========== 视觉检测方法 ==========
     def detect_ball_color(self):
@@ -449,7 +460,7 @@ class Mission:
             rospy.logerr("Failed to reach rotating ball observation point")
             self.state = "LANDING"
             return
-        if not self.uav.set_z(70):
+        if not self.uav.move_z(0):
             rospy.logerr("Failed to set height for rotating ball")
             self.state = "LANDING"
             return
@@ -488,7 +499,7 @@ class Mission:
         detect_points = [(250, 235), (150, 235), (350, 235)]
         fire_found = False
         selected_x = None
-        self.uav.set_z(175)
+        self.uav.move_z(105)
 
         for (wx, wy) in detect_points:
             rospy.loginfo(f"Checking at ({wx}, {wy})")
@@ -507,7 +518,7 @@ class Mission:
             rospy.logwarn("No fire window detected, using first point as default")
             selected_x = detect_points[0][0]
 
-        self.uav.set_z(148)
+        self.uav.move_z(-27)
         self.uav.goto_xy(selected_x, 235)
 
         rospy.sleep(2)
@@ -516,7 +527,7 @@ class Mission:
     def light(self):
         for i in range(3):
             self.uav.goto_xy(250, 400)
-            self.uav.set_z(125)
+            self.uav.move_z(-23)
             self.uav.turn_to(90)
 
             corners = None
@@ -540,9 +551,11 @@ class Mission:
                 continue
 
             x_world, z_world = self.uav.pixel_to_world(pixel[0], pixel[1], corners)
+            with self.uav.state.lock:
+                cur_z = self.uav.state.position.z * 100.0 if self.uav.state.position else 0
             rospy.loginfo(f"Go to x={x_world}, z={z_world}")
             self.uav.goto_xy(x_world, 500)
-            self.uav.set_z(z_world)
+            self.uav.move_z(z_world - cur_z)
 
             target_msg = f"target{i + 1}"
             self.uav.judge_pub.publish(target_msg)
@@ -555,7 +568,9 @@ class Mission:
     def landing(self):
         rospy.loginfo("Landing...")
         self.uav.goto_xy(470, 470)
-        self.uav.set_z(30)
+        with self.uav.state.lock:
+            cur_z = self.uav.state.position.z * 100.0 if self.uav.state.position else 0
+        self.uav.move_z(30 - cur_z)
         self.uav.land()
         rospy.sleep(3)
         self.state = "FINISH"

@@ -29,3 +29,72 @@
 [INFO] [1780107962.024756]: Setting height to 70 cm
 [WARN] [1780107977.249027]: set_z timeout at 70 cm
 
+[INFO] [1780108603.666991]: Current state: TAKEOFF
+[INFO] [1780108606.673067]: Initial height: 0.00m
+[INFO] [1780108606.674186]: Taking off...
+[INFO] [1780108609.178053]: Takeoff confirmed, height=0.61m (delta=0.61m)
+[INFO] [1780108609.183053]: Waiting for service: /512/set_downvision
+[ERROR] [1780108609.204428]: Downvision enable failed: Set Downvision: True
+[INFO] [1780108609.206501]: Current state: LANDING
+[INFO] [1780108609.208344]: Landing...
+[INFO] [1780108609.209736]: Going to (470, 470) cm
+[INFO] [1780108609.210820]: turn_to: yaw=0.0  target=44.1  err=44.1  step=20  dir=ccw
+[INFO] [1780108609.712117]: turn_to: yaw=0.0  target=44.1  err=44.1  step=20  dir=ccw
+[INFO] [1780108610.214882]: turn_to: yaw=0.0  target=44.1  err=44.1  step=20  dir=ccw
+[INFO] [1780108610.718313]: turn_to: yaw=0.0  target=44.1  err=44.1  step=20  dir=ccw
+[INFO] [1780108611.221617]: turn_to: yaw=0.0  target=44.1  err=44.1  step=20  dir=ccw
+[INFO] [1780108611.725364]: turn_to: yaw=0.0  target=44.1  err=44.1  step=20  dir=ccw
+[INFO] [1780108612.229155]: turn_to: yaw=0.0  target=44.1  err=44.1  step=20  dir=ccw
+[INFO] [1780108612.733417]: turn_to: yaw=0.0  target=44.1  err=44.1  step=20  dir=ccw
+[INFO] [1780108613.237464]: turn_to: yaw=0.0  target=44.1  err=44.1  step=20  dir=ccw
+[INFO] [1780108613.740260]: turn_to: yaw=0.0  target=44.1  err=44.1  step=20  dir=ccw
+[INFO] [1780108614.244287]: turn_to: yaw=0.0  target=44.1  err=44.1  step=20  dir=ccw
+[INFO] [1780108614.746387]: turn_to: yaw=0.0  target=44.1  err=44.1  step=20  dir=ccw
+[INFO] [1780108615.250106]: turn_to: yaw=0.0  target=44.1  err=44.1  step=20  dir=ccw
+[INFO] [1780108615.752455]: turn_to: yaw=6.0  target=44.1  err=38.1  step=20  dir=ccw
+[INFO] [1780108616.256503]: turn_to: yaw=15.0  target=44.1  err=29.1  step=20  dir=ccw
+[INFO] [1780108616.759513]: turn_to: yaw=17.0  target=44.1  err=27.1  step=20  dir=ccw
+[INFO] [1780108617.263503]: turn_to: yaw=32.0  target=44.1  err=12.1  step=12  dir=ccw
+[INFO] [1780108618.769344]: turn_to: yaw=56.0  target=44.1  err=-11.9  step=11  dir=cw
+[INFO] [1780108619.273606]: turn_to: yaw=62.0  target=44.1  err=-17.9  step=17  dir=cw
+[INFO] [1780108619.778031]: turn_to: yaw=63.0  target=44.1  err=-18.9  step=18  dir=cw
+[INFO] [1780108620.282214]: turn_to: yaw=62.0  target=44.1  err=-17.9  step=17  dir=cw
+[INFO] [1780108620.786571]: turn_to: yaw=63.0  target=44.1  err=-18.9  step=18  dir=cw
+[INFO] [1780108621.289543]: turn_to: yaw=60.0  target=44.1  err=-15.9  step=15  dir=cw
+[INFO] [1780108621.791089]: turn_to: yaw=50.0  target=44.1  err=-5.9  step=5  dir=cw
+[INFO] [1780108623.294523]: turn_to: yaw=29.0  target=43.5  err=14.5  step=14  dir=ccw
+[INFO] [1780108623.798735]: turn_to: yaw=29.0  target=43.5  err=14.5  step=14  dir=ccw
+[INFO] [1780108624.303598]: turn_to: yaw=29.0  target=43.5  err=14.5  step=14  dir=ccw
+[INFO] [1780108624.807230]: turn_to: yaw=29.0  target=43.5  err=14.5  step=14  dir=ccw
+[INFO] [1780108625.313041]: turn_to: yaw=30.0  target=43.5  err=13.5  step=13  dir=ccw
+[INFO] [1780108626.816284]: turn_to: yaw=56.0  target=43.9  err=-12.1  step=12  dir=cw
+[INFO] [1780108627.319736]: turn_to: yaw=56.0  target=43.9  err=-12.1  step=12  dir=cw
+[INFO] [1780108627.823856]: turn_to: yaw=64.0  target=43.9  err=-20.1  step=20  dir=cw
+[INFO] [1780108628.325674]: turn_to: yaw=64.0  target=43.9  err=-20.1  step=20  dir=cw
+[INFO] [1780108628.830090]: turn_to: yaw=64.0  target=43.9  err=-20.1  step=20  dir=cw
+[INFO] [1780108629.331807]: turn_to: yaw=55.0  target=43.9  err=-11.1  step=11  dir=cw
+[INFO] [1780108630.834460]: turn_to: yaw=37.0  target=43.3  err=6.3  step=6  dir=ccw
+[INFO] [1780108631.338478]: turn_to: yaw=37.0  target=43.3  err=6.3  step=6  dir=ccw
+[INFO] [1780108631.842223]: turn_to: yaw=18.0  target=43.3  err=25.3  step=20  dir=ccw
+[INFO] [1780108632.345404]: turn_to: yaw=15.0  target=43.3  err=28.3  step=20  dir=ccw
+[INFO] [1780108632.849041]: turn_to: yaw=15.0  target=43.3  err=28.3  step=20  dir=ccw
+[INFO] [1780108633.352497]: turn_to: yaw=16.0  target=43.3  err=27.3  step=20  dir=ccw
+[INFO] [1780108633.856495]: turn_to: yaw=16.0  target=43.3  err=27.3  step=20  dir=ccw
+[INFO] [1780108634.359447]: turn_to: yaw=16.0  target=43.3  err=27.3  step=20  dir=ccw
+[INFO] [1780108634.863702]: turn_to: yaw=51.0  target=43.3  err=-7.7  step=7  dir=cw
+[INFO] [1780108635.366395]: turn_to: yaw=51.0  target=43.3  err=-7.7  step=7  dir=cw
+[INFO] [1780108635.870229]: turn_to: yaw=51.0  target=43.3  err=-7.7  step=7  dir=cw
+[INFO] [1780108636.372547]: turn_to: yaw=51.0  target=43.3  err=-7.7  step=7  dir=cw
+[INFO] [1780108636.874158]: turn_to: yaw=66.0  target=43.3  err=-22.7  step=20  dir=cw
+[INFO] [1780108637.375856]: turn_to: yaw=66.0  target=43.3  err=-22.7  step=20  dir=cw
+[INFO] [1780108637.878240]: turn_to: yaw=57.0  target=43.3  err=-13.7  step=13  dir=cw
+[INFO] [1780108638.381162]: turn_to: yaw=57.0  target=43.3  err=-13.7  step=13  dir=cw
+[INFO] [1780108638.884246]: turn_to: yaw=57.0  target=43.3  err=-13.7  step=13  dir=cw
+[INFO] [1780108639.387878]: turn_to: yaw=57.0  target=43.3  err=-13.7  step=13  dir=cw
+[INFO] [1780108639.892565]: turn_to: yaw=57.0  target=43.3  err=-13.7  step=13  dir=cw
+[INFO] [1780108640.396371]: turn_to: yaw=20.0  target=43.3  err=23.3  step=20  dir=ccw
+[WARN] [1780108640.901211]: turn_to timeout at 43.29344951969638 deg
+[INFO] [1780108640.904311]: Setting height to 30 cm
+[WARN] [1780108656.126237]: set_z timeout at 30 cm
+[INFO] [1780108659.132131]: Current state: FINISH
+[INFO] [1780108659.133033]: Mission finished
