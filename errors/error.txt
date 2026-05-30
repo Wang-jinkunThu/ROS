@@ -193,3 +193,83 @@
 [WARN] [1780109605.054120]: set_z timeout at 30 cm
 [INFO] [1780109608.059027]: Current state: FINISH
 [INFO] [1780109608.062259]: Mission finished
+
+[INFO] [1780110726.623813]: Current state: TAKEOFF
+[INFO] [1780110726.925752]: Initial height: 0.59m
+[INFO] [1780110726.926695]: Taking off...
+[ERROR] [1780110741.949878]: Takeoff timeout: delta=0.26m
+[INFO] [1780110741.953074]: Current state: LANDING
+[INFO] [1780110741.954941]: Landing...
+[INFO] [1780110741.956414]: Going to (470, 470) cm
+[INFO] [1780110741.957934]: turn_to: yaw=-11.0  target=44.3  err=55.3  step=10  dir=ccw
+[INFO] [1780110742.460779]: turn_to: yaw=-11.0  target=44.3  err=55.3  step=10  dir=ccw
+[INFO] [1780110742.964523]: turn_to: yaw=-11.0  target=44.3  err=55.3  step=10  dir=ccw
+[INFO] [1780110743.469609]: turn_to: yaw=-5.0  target=44.3  err=49.3  step=10  dir=ccw
+[INFO] [1780110743.973726]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110744.478709]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110744.983134]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110745.487590]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110745.991802]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110746.495125]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110746.997170]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110747.499045]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110748.002073]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110748.506480]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110749.010951]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110749.515069]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110750.019637]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110750.523725]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110751.028164]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110751.531508]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[WARN] [1780110752.035805]: turn_to timeout at 44.30677528621497 deg
+[WARN] [1780110752.038749]: turn_to failed (1/3), retrying...
+[INFO] [1780110753.042089]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110753.544162]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110754.046314]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110754.549972]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110755.054749]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110755.559217]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110756.063427]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110756.567501]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110757.071421]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110757.575510]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110758.080068]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110758.584994]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110759.090026]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110759.593869]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110760.095614]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110760.597800]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110761.101092]: turn_to: yaw=0.0  target=44.3  err=44.3  step=10  dir=ccw
+[INFO] [1780110761.605247]: turn_to: suspicious yaw jump 0.0->-174.0, waiting
+[INFO] [1780110761.908051]: turn_to: yaw=-174.0  target=44.3  err=-141.7  step=10  dir=cw
+[INFO] [1780110762.412124]: turn_to: yaw=-167.0  target=44.3  err=-148.7  step=10  dir=cw
+[INFO] [1780110762.916950]: turn_to: yaw=-161.0  target=44.3  err=-154.7  step=10  dir=cw
+[WARN] [1780110763.421036]: turn_to timeout at 44.26443126191234 deg
+[WARN] [1780110763.423187]: turn_to failed (2/3), retrying...
+[INFO] [1780110764.426263]: turn_to: yaw=-172.0  target=44.3  err=-143.7  step=10  dir=cw
+[INFO] [1780110764.929479]: turn_to: yaw=-173.0  target=44.3  err=-142.7  step=10  dir=cw
+[INFO] [1780110765.433914]: turn_to: yaw=-175.0  target=44.3  err=-140.7  step=10  dir=cw
+[INFO] [1780110765.938403]: turn_to: suspicious yaw jump -175.0->177.0, waiting
+[INFO] [1780110766.242459]: turn_to: yaw=170.0  target=44.3  err=-125.7  step=10  dir=cw
+[INFO] [1780110766.746582]: turn_to: yaw=164.0  target=44.3  err=-119.7  step=10  dir=cw
+[INFO] [1780110767.250535]: turn_to: yaw=156.0  target=44.3  err=-111.7  step=10  dir=cw
+[INFO] [1780110767.754727]: turn_to: yaw=152.0  target=44.3  err=-107.7  step=10  dir=cw
+[INFO] [1780110768.256876]: turn_to: yaw=152.0  target=44.3  err=-107.7  step=10  dir=cw
+[INFO] [1780110768.759571]: turn_to: yaw=152.0  target=44.3  err=-107.7  step=10  dir=cw
+[INFO] [1780110769.264193]: turn_to: yaw=152.0  target=44.3  err=-107.7  step=10  dir=cw
+[INFO] [1780110769.768489]: turn_to: yaw=152.0  target=44.3  err=-107.7  step=10  dir=cw
+[INFO] [1780110770.277146]: turn_to: yaw=152.0  target=44.3  err=-107.7  step=10  dir=cw
+[INFO] [1780110770.782156]: turn_to: yaw=152.0  target=44.3  err=-107.7  step=10  dir=cw
+[INFO] [1780110771.287478]: turn_to: yaw=152.0  target=44.3  err=-107.7  step=10  dir=cw
+[INFO] [1780110771.792423]: turn_to: yaw=152.0  target=44.3  err=-107.7  step=10  dir=cw
+[INFO] [1780110772.295295]: turn_to: yaw=152.0  target=44.3  err=-107.7  step=10  dir=cw
+[INFO] [1780110772.798629]: turn_to: yaw=152.0  target=44.3  err=-107.7  step=10  dir=cw
+[INFO] [1780110773.303811]: turn_to: yaw=152.0  target=44.3  err=-107.7  step=10  dir=cw
+[INFO] [1780110773.807549]: turn_to: yaw=152.0  target=44.3  err=-107.7  step=10  dir=cw
+[INFO] [1780110774.311516]: turn_to: yaw=152.0  target=44.3  err=-107.7  step=10  dir=cw
+[WARN] [1780110774.813127]: turn_to timeout at 44.268604246902456 deg
+[ERROR] [1780110774.814705]: turn_to failed 3 times, giving up
+[INFO] [1780110774.815960]: Setting height: delta=-57.0 cm  (from 87.0 to 30.0 cm)
+[WARN] [1780110789.839525]: move_z timeout: delta=-57.0 cm  current=86.0 target=30.0
+[INFO] [1780110792.845109]: Current state: FINISH
+[INFO] [1780110792.846001]: Mission finished
