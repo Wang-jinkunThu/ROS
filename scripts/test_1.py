@@ -380,19 +380,29 @@ class Mission:
 
     # ========== 各状态实现 ==========
     def do_takeoff(self):
+        # 记录起飞前高度
+        init_z = 0.0
+        for _ in range(10):
+            with self.uav.state.lock:
+                if self.uav.state.position is not None:
+                    init_z = self.uav.state.position.z
+                    break
+            rospy.sleep(0.3)
+        rospy.loginfo(f"Initial height: {init_z:.2f}m")
+
         rospy.loginfo("Taking off...")
         self.uav.takeoff()
 
-        # 等待起飞完成（position.z > 0.3m 说明已离地）
+        # 等待高度上升 0.3m 以上确认起飞
         deadline = rospy.Time.now() + rospy.Duration(15)
         while not rospy.is_shutdown():
             with self.uav.state.lock:
-                pz = self.uav.state.position.z if self.uav.state.position else 0
-            if pz > 0.3:
-                rospy.loginfo(f"Takeoff confirmed, height={pz:.2f}m")
+                pz = self.uav.state.position.z if self.uav.state.position else init_z
+            if pz - init_z > 0.3:
+                rospy.loginfo(f"Takeoff confirmed, height={pz:.2f}m (delta={pz - init_z:.2f}m)")
                 break
             if rospy.Time.now() > deadline:
-                rospy.logerr("Takeoff timeout: drone not airborne")
+                rospy.logerr(f"Takeoff timeout: delta={pz - init_z:.2f}m")
                 self.state = "LANDING"
                 return
             rospy.sleep(0.5)

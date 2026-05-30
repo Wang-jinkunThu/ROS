@@ -5,3 +5,13 @@
 [INFO] [1780106986.599315]: Current state: BALL
 [INFO] [1780106986.600876]: Going to (150, 125) cm
 
+[INFO] [1780107598.326297]: Current state: TAKEOFF
+[INFO] [1780107598.328053]: Taking off...
+[INFO] [1780107598.832072]: Takeoff confirmed, height=0.95m
+[INFO] [1780107598.835395]: Waiting for service: /512/set_downvision
+[INFO] [1780107598.848363]: Downvision enabled successfully
+[INFO] [1780107598.850489]: Waiting for position data...
+[INFO] [1780107598.853289]: Position data ready
+[INFO] [1780107598.855034]: Current state: BALL
+[INFO] [1780107598.856577]: Going to (150, 125) cm
+
