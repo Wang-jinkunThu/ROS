@@ -84,6 +84,7 @@ class TelloControl:
         rate = rospy.Rate(10)
         deadline = rospy.Time.now() + rospy.Duration(timeout)
         rospy.loginfo(f"Going to ({target_x_cm}, {target_y_cm}) cm")
+        turn_failures = 0
 
         while not rospy.is_shutdown():
             if rospy.Time.now() > deadline:
@@ -108,7 +109,14 @@ class TelloControl:
             target_rad = math.atan2(dy, dx)
             target_deg = math.degrees(target_rad)
             if not self.turn_to(target_deg, tol_deg=5, timeout=10):
-                return False
+                turn_failures += 1
+                if turn_failures >= 3:
+                    rospy.logerr(f"turn_to failed {turn_failures} times, giving up")
+                    return False
+                rospy.logwarn(f"turn_to failed ({turn_failures}/3), retrying...")
+                rospy.sleep(1)
+                continue
+            turn_failures = 0
 
             step = min(dist, 20.0)
             self.forward(int(step))
@@ -120,6 +128,8 @@ class TelloControl:
         """
         rate = rospy.Rate(10)
         deadline = rospy.Time.now() + rospy.Duration(timeout)
+        prev_yaw = None
+        stable_count = 0
 
         while not rospy.is_shutdown():
             if rospy.Time.now() > deadline:
@@ -136,16 +146,34 @@ class TelloControl:
                 err -= 360
             if err < -180:
                 err += 360
+
+            # 稳定性检查：连续 3 次在容差内才算收敛
             if abs(err) < tol_deg:
-                self.stop()
-                return True
-            step = min(int(abs(err)), 20)
+                stable_count += 1
+                if stable_count >= 3:
+                    self.stop()
+                    return True
+            else:
+                stable_count = 0
+
+            # 检测异常跳变：yaw 变化远超命令量，等待下一次读数
+            if prev_yaw is not None:
+                yaw_delta = abs(yaw - prev_yaw)
+                if yaw_delta > 25:
+                    rospy.loginfo_throttle(1.0, f"turn_to: suspicious yaw jump {prev_yaw:.1f}->{yaw:.1f}, waiting")
+                    prev_yaw = yaw
+                    rospy.sleep(0.3)
+                    continue
+
+            step = min(int(abs(err) * 0.6), 10)
+            step = max(step, 3)
             rospy.loginfo_throttle(0.5, f"turn_to: yaw={yaw:.1f}  target={target_yaw_deg:.1f}  err={err:.1f}  step={step}  dir={'ccw' if err > 0 else 'cw'}")
             if err > 0:
                 self.ccw(step)
             else:
                 self.cw(step)
-            rospy.sleep(0.3)
+            prev_yaw = yaw
+            rospy.sleep(0.5)
 
     def move_z(self, delta_cm, tol_cm=5, timeout=15):
         """z 方向上移动相对高度，delta_cm > 0 上升，< 0 下降，成功返回 True。"""
@@ -419,22 +447,32 @@ class Mission:
                 return
             rospy.sleep(0.5)
 
-        # 启用下视视觉定位
+        # 起飞后稍等让飞控稳定，再启用下视视觉定位
+        rospy.sleep(2)
+
         drone_name = self.uav.state.name
         service_name = f"/{drone_name}/set_downvision" if drone_name else "/set_downvision"
         rospy.loginfo(f"Waiting for service: {service_name}")
         rospy.wait_for_service(service_name)
-        try:
-            set_down = rospy.ServiceProxy(service_name, SetBool)
-            resp = set_down(True)
-            if resp.success:
-                rospy.loginfo("Downvision enabled successfully")
-            else:
-                rospy.logerr(f"Downvision enable failed: {resp.message}")
-                self.state = "LANDING"
-                return
-        except Exception as e:
-            rospy.logerr(f"Failed to call downvision service: {e}")
+
+        downvision_ok = False
+        for attempt in range(3):
+            try:
+                set_down = rospy.ServiceProxy(service_name, SetBool)
+                resp = set_down(True)
+                if resp.success:
+                    rospy.loginfo("Downvision enabled successfully")
+                    downvision_ok = True
+                    break
+                else:
+                    rospy.logwarn(f"Downvision attempt {attempt + 1}/3 failed: {resp.message}")
+                    rospy.sleep(1)
+            except Exception as e:
+                rospy.logwarn(f"Downvision attempt {attempt + 1}/3 exception: {e}")
+                rospy.sleep(1)
+
+        if not downvision_ok:
+            rospy.logerr("Downvision enable failed after 3 attempts")
             self.state = "LANDING"
             return
 
