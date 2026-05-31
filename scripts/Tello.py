@@ -79,7 +79,7 @@ class TelloControl:
     # ========== 闭环控制方法 ==========
     def goto_xy(self, target_x_cm, target_y_cm, tol_cm=5, timeout=30):
         """
-        闭环飞到绝对坐标 (cm)，成功返回 True，超时返回 False。
+        闭环飞到绝对坐标 (cm),成功返回 True,超时返回 False.
         """
         rate = rospy.Rate(10)
         deadline = rospy.Time.now() + rospy.Duration(timeout)
@@ -261,7 +261,7 @@ class TelloControl:
                 return None
             rospy.sleep(0.5)
 
-    def det_fire(self):
+    def detect_fire(self):
         """检测图像中是否存在红色圆形（火窗标记），返回 True/False"""
         if self.state.image is None:
             rospy.logwarn("No image received yet")

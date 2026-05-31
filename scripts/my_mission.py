@@ -172,7 +172,7 @@ class StateMachine:
             self.uav.turn_to(90)
             rospy.sleep(0.5)
 
-            if self.uav.det_fire():
+            if self.uav.detect_fire():
                 rospy.loginfo(f"Fire window detected at ({wx}, {wy})")
                 fire_found = True
                 selected_x = wx
