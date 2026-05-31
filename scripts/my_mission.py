@@ -22,11 +22,11 @@ class StateMachine:
             try:
                 if self.state == "TAKEOFF":
                     self.do_takeoff()
-                elif self.state == "BALL":
-                    self.do_ball()
-                elif self.state == "WINDOW":
+                elif self.state == "DETECT_BALL":
+                    self.do_detectball()
+                elif self.state == "FIND_WINDOW":
                     self.do_window()
-                elif self.state == "LIGHT":
+                elif self.state == "DETECT_LIGHT":
                     self.do_light()
                 elif self.state == "LANDING":
                     self.do_landing()
@@ -117,9 +117,9 @@ class StateMachine:
                 return
             rospy.sleep(0.5)
 
-        self.state = "BALL"
+        self.state = _
 
-    def do_ball(self):
+    def do_detectball(self):
         if not self.uav.goto_xy(150, 125):
             rospy.logerr("Failed to reach rotating ball observation point")
             self.state = "LANDING"
@@ -157,7 +157,7 @@ class StateMachine:
         print(f"[JUDGE] Ball result sent: {ball_result}")
 
         rospy.sleep(1)
-        self.state = "WINDOW"
+        self.state = "FIND_WINDOW"
 
     def do_window(self):
         detect_points = [(250, 235), (150, 235), (350, 235)]
@@ -186,7 +186,7 @@ class StateMachine:
         self.uav.goto_xy(selected_x, 235)
 
         rospy.sleep(2)
-        self.state = "LIGHT"
+        self.state = "DETECT_LIGHT"
 
     def do_light(self):
         for i in range(3):
@@ -246,5 +246,5 @@ class StateMachine:
 if __name__ == "__main__":
     rospy.init_node("tello_control_node", anonymous=False)
     name = rospy.get_param('~name', "")
-    mymission = StateMachine(name)
-    mymission.run()
+    my_mission = StateMachine(name)
+    my_mission.run()
