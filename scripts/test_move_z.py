@@ -36,20 +36,6 @@ def main():
 
     assert init_z is not None
     rospy.loginfo(f"First position received, initial height: {init_z:.2f}m")
-
-    deadline = rospy.Time.now() + rospy.Duration(10)
-    while not rospy.is_shutdown():
-        with uav.state.lock:
-            pz = uav.state.position.z if uav.state.position else init_z
-        if pz - init_z > 0.3:
-            rospy.loginfo(f"Takeoff OK (height={pz:.2f}m, delta={pz - init_z:.2f}m)")
-            break
-        if rospy.Time.now() > deadline:
-            rospy.logerr(f"Takeoff timeout: delta={pz - init_z:.2f}m")
-            uav.land()
-            return
-        rospy.sleep(0.5)
-
     rospy.sleep(2)
 
     # --- 交互循环 ---
