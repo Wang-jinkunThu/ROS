@@ -236,6 +236,124 @@ class TelloControl:
                 self.down(step)
             rospy.sleep(0.5)
 
+    def move_x(self, delta_cm, tol_cm=5, timeout=15):
+        """x 方向上水平移动相对距离（世界坐标系），delta_cm > 0 向 +x 方向，成功返回 True。"""
+        rate = rospy.Rate(10)
+        deadline = rospy.Time.now() + rospy.Duration(timeout)
+        stable_count = 0
+
+        init_x = None
+        with self.state.lock:
+            if self.state.position is not None:
+                init_x = self.state.position.x * 100.0
+
+        if init_x is None:
+            if delta_cm > 0:
+                self.right(min(abs(delta_cm), 30))
+            else:
+                self.left(min(abs(delta_cm), 30))
+            rospy.loginfo("move_x: sent initial command, waiting for pose...")
+            for _ in range(30):
+                rospy.sleep(0.5)
+                with self.state.lock:
+                    if self.state.position is not None:
+                        init_x = self.state.position.x * 100.0
+                        break
+
+        if init_x is None:
+            rospy.logerr("move_x: cannot get initial position")
+            return False
+
+        target_x = init_x + delta_cm
+        rospy.loginfo(f"move_x: delta={delta_cm} cm  (from x={init_x:.1f} to x={target_x:.1f} cm)")
+
+        while not rospy.is_shutdown():
+            if rospy.Time.now() > deadline:
+                rospy.logwarn(f"move_x timeout: delta={delta_cm} cm  target_x={target_x:.1f}")
+                return False
+
+            with self.state.lock:
+                if self.state.position is None:
+                    rate.sleep()
+                    continue
+                px = self.state.position.x * 100.0
+
+            dx = target_x - px
+            if abs(dx) < tol_cm:
+                stable_count += 1
+                if stable_count >= 3:
+                    rospy.loginfo(f"Reached x={px:.1f} cm")
+                    self.stop()
+                    return True
+            else:
+                stable_count = 0
+
+            step = max(min(int(abs(dx) * 0.5), 50), 20)
+            if dx > 0:
+                self.right(step)
+            else:
+                self.left(step)
+            rospy.sleep(0.5)
+
+    def move_y(self, delta_cm, tol_cm=5, timeout=15):
+        """y 方向上水平移动相对距离（世界坐标系），delta_cm > 0 向 +y 方向，成功返回 True。"""
+        rate = rospy.Rate(10)
+        deadline = rospy.Time.now() + rospy.Duration(timeout)
+        stable_count = 0
+
+        init_y = None
+        with self.state.lock:
+            if self.state.position is not None:
+                init_y = self.state.position.y * 100.0
+
+        if init_y is None:
+            if delta_cm > 0:
+                self.forward(min(abs(delta_cm), 30))
+            else:
+                self.back(min(abs(delta_cm), 30))
+            rospy.loginfo("move_y: sent initial command, waiting for pose...")
+            for _ in range(30):
+                rospy.sleep(0.5)
+                with self.state.lock:
+                    if self.state.position is not None:
+                        init_y = self.state.position.y * 100.0
+                        break
+
+        if init_y is None:
+            rospy.logerr("move_y: cannot get initial position")
+            return False
+
+        target_y = init_y + delta_cm
+        rospy.loginfo(f"move_y: delta={delta_cm} cm  (from y={init_y:.1f} to y={target_y:.1f} cm)")
+
+        while not rospy.is_shutdown():
+            if rospy.Time.now() > deadline:
+                rospy.logwarn(f"move_y timeout: delta={delta_cm} cm  target_y={target_y:.1f}")
+                return False
+
+            with self.state.lock:
+                if self.state.position is None:
+                    rate.sleep()
+                    continue
+                py = self.state.position.y * 100.0
+
+            dy = target_y - py
+            if abs(dy) < tol_cm:
+                stable_count += 1
+                if stable_count >= 3:
+                    rospy.loginfo(f"Reached y={py:.1f} cm")
+                    self.stop()
+                    return True
+            else:
+                stable_count = 0
+
+            step = max(min(int(abs(dy) * 0.5), 50), 20)
+            if dy > 0:
+                self.forward(step)
+            else:
+                self.back(step)
+            rospy.sleep(0.5)
+
     # ========== 视觉检测方法 ==========
     def detect_ball_color(self):
         """检测图像中球的颜色，返回 'g' 或 'r'，检测不到返回 None"""
