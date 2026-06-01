@@ -34,7 +34,7 @@ def simple_turn_to(uav, target_deg, tol_deg=10, timeout=20):
 
     phase = "coarse"       # coarse → fine → done
     coarse_step = 30       # 粗调每步转 30°
-    fine_step = 10         # 精调每步转 10°
+    fine_step = 10           # 精调每步转 10°
 
     rospy.loginfo(f"[simple_turn_to] target={target_deg} deg, tol={tol_deg} deg")
 

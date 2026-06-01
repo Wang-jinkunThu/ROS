@@ -179,26 +179,38 @@ class TelloControl:
         """z 方向上移动相对高度，delta_cm > 0 上升，< 0 下降，成功返回 True。"""
         rate = rospy.Rate(10)
         deadline = rospy.Time.now() + rospy.Duration(timeout)
+        stable_count = 0
 
-        # 记录起始高度
+        # 尝试获取当前高度，拿不到则先发一次移动指令让无人机动起来
         init_z = None
-        for _ in range(10):
-            with self.state.lock:
-                if self.state.position is not None:
-                    init_z = self.state.position.z * 100.0
-                    break
-            rospy.sleep(0.2)
+        with self.state.lock:
+            if self.state.position is not None:
+                init_z = self.state.position.z * 100.0
+
+        if init_z is None:
+            # 盲发第一次指令，触发运动使 pose 数据出现
+            if delta_cm > 0:
+                self.up(min(abs(delta_cm), 20))
+            else:
+                self.down(min(abs(delta_cm), 20))
+            rospy.loginfo("move_z: sent initial command, waiting for pose...")
+            for _ in range(30):
+                rospy.sleep(0.5)
+                with self.state.lock:
+                    if self.state.position is not None:
+                        init_z = self.state.position.z * 100.0
+                        break
 
         if init_z is None:
             rospy.logerr("move_z: cannot get initial height")
             return False
 
         target_z = init_z + delta_cm
-        rospy.loginfo(f"Setting height: delta={delta_cm} cm  (from {init_z:.1f} to {target_z:.1f} cm)")
+        rospy.loginfo(f"move_z: delta={delta_cm} cm  (from {init_z:.1f} to {target_z:.1f} cm)")
 
         while not rospy.is_shutdown():
             if rospy.Time.now() > deadline:
-                rospy.logwarn(f"move_z timeout: delta={delta_cm} cm  current={pz:.1f} target={target_z:.1f}")
+                rospy.logwarn(f"move_z timeout: delta={delta_cm} cm  target={target_z:.1f}")
                 return False
 
             with self.state.lock:
@@ -209,23 +221,20 @@ class TelloControl:
 
             dz = target_z - pz
             if abs(dz) < tol_cm:
-                rospy.loginfo(f"Reached height {pz:.1f} cm")
-                self.stop()
-                return True
-
-            step = 10
-            if abs(dz) > step:
-                if dz > 0:
-                    self.up(step)
-                else:
-                    self.down(step)
-                rospy.sleep(0.6)
+                stable_count += 1
+                if stable_count >= 3:
+                    rospy.loginfo(f"Reached height {pz:.1f} cm")
+                    self.stop()
+                    return True
             else:
-                if dz > 0:
-                    self.up(int(abs(dz)))
-                else:
-                    self.down(int(abs(dz)))
-                rospy.sleep(0.3)
+                stable_count = 0
+
+            step = max(min(int(abs(dz) * 0.5), 15), 5)
+            if dz > 0:
+                self.up(step)
+            else:
+                self.down(step)
+            rospy.sleep(0.5)
 
     # ========== 视觉检测方法 ==========
     def detect_ball_color(self):
