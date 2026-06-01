@@ -91,34 +91,32 @@ def main():
     name = rospy.get_param('~name', "")
     uav = TelloControl(name)
 
-    # --- 起飞 ---
+    # --- 起飞（静止时无 pose 数据，先起飞再等 pose）---
+    rospy.sleep(2)
+
     rospy.loginfo("Taking off...")
     uav.takeoff()
 
-    # 等待起飞完成
-    init_z = 0
-    for _ in range(10):
+    # 等待位置数据出现（无人机运动后才会发布 pose）
+    rospy.loginfo("Waiting for position data...")
+    deadline = rospy.Time.now() + rospy.Duration(15)
+    init_z = None
+    while not rospy.is_shutdown():
         with uav.state.lock:
             if uav.state.position is not None:
                 init_z = uav.state.position.z
                 break
-        rospy.sleep(0.3)
-
-    deadline = rospy.Time.now() + rospy.Duration(15)
-    while not rospy.is_shutdown():
-        with uav.state.lock:
-            pz = uav.state.position.z if uav.state.position else init_z
-        if pz - init_z > 0.3:
-            rospy.loginfo(f"Takeoff OK (height={pz:.2f}m)")
-            break
         if rospy.Time.now() > deadline:
-            rospy.logerr("Takeoff timeout!")
+            rospy.logerr("Timeout waiting for position data after takeoff")
             uav.land()
             return
         rospy.sleep(0.5)
 
-    rospy.sleep(2)
+    assert init_z is not None
+    rospy.loginfo(f"First position received, initial height: {init_z:.2f}m")
 
+    rospy.sleep(2)
+ 
     # --- 交互循环 ---
     print("\n" + "=" * 50)
     print("  输入目标角度（90 的整数倍），输入 q 退出")
