@@ -241,5 +241,4 @@ if __name__ == "__main__":
     rospy.init_node("tello_control_node", anonymous=False)
     name = rospy.get_param('~name', "")
     control = TelloControl(name)
-    rospy.on_shutdown(control.land)
-    rospy.spin()
+    control.position_control_demo()
