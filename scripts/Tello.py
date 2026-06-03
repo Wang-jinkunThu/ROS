@@ -376,6 +376,54 @@ class TelloControl:
             self._yaw_map_cmd(cmd, step)
             rospy.sleep(0.5)
 
+    def set_z(self, target_cm, tol_cm=20, timeout=15):
+        """飞到指定绝对高度 target_cm（cm），成功返回 True。"""
+        rate = rospy.Rate(10)
+        deadline = rospy.Time.now() + rospy.Duration(timeout)
+        stable_count = 0
+
+        init_z = None
+        for _ in range(30):
+            with self.state.lock:
+                if self.state.position is not None:
+                    init_z = self.state.position.z * 100.0
+                    break
+            rospy.sleep(0.2)
+
+        if init_z is None:
+            rospy.logerr("set_z: cannot get current height")
+            return False
+
+        rospy.loginfo(f"set_z: target={target_cm:.1f} cm  (current={init_z:.1f} cm)")
+
+        while not rospy.is_shutdown():
+            if rospy.Time.now() > deadline:
+                rospy.logwarn(f"set_z timeout: target={target_cm:.1f} cm")
+                return False
+
+            with self.state.lock:
+                if self.state.position is None:
+                    rate.sleep()
+                    continue
+                pz = self.state.position.z * 100.0
+
+            dz = target_cm - pz
+            if abs(dz) < tol_cm:
+                stable_count += 1
+                if stable_count >= 3:
+                    rospy.loginfo(f"set_z done: {pz:.1f} cm")
+                    self.stop()
+                    return True
+            else:
+                stable_count = 0
+
+            step = max(min(int(abs(dz) * 0.5), 50), 20)
+            if dz > 0:
+                self.up(step)
+            else:
+                self.down(step)
+            rospy.sleep(0.5)
+
     # ========== 视觉检测方法 ==========
     def detect_ball_color(self):
         """检测图像中球的颜色，返回 'g' 或 'r'，检测不到返回 None"""
