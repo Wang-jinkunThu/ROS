@@ -25,9 +25,9 @@ class StateMachine:
                 elif self.state == "DETECT_BALL":
                     self.do_detectball()
                 elif self.state == "FIND_WINDOW":
-                    self.do_window()
+                    self.do_find_window()
                 elif self.state == "DETECT_LIGHT":
-                    self.do_light()
+                    self.do_detect_light()
                 elif self.state == "LANDING":
                     self.do_landing()
                 elif self.state == "FINISH":
@@ -159,7 +159,7 @@ class StateMachine:
         rospy.sleep(1)
         self.state = "FIND_WINDOW"
 
-    def do_window(self):
+    def do_find_window(self):
         detect_points = [(250, 235), (150, 235), (350, 235)]
         fire_found = False
         selected_x = None
@@ -188,7 +188,7 @@ class StateMachine:
         rospy.sleep(2)
         self.state = "DETECT_LIGHT"
 
-    def do_light(self):
+    def do_detect_light(self):
         for i in range(3):
             self.uav.goto_xy(250, 400)
             self.uav.move_z(-23)
