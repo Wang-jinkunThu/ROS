@@ -264,7 +264,7 @@ class StateMachine:
         pixel = None
         deadline = rospy.Time.now() + rospy.Duration(30)
         while pixel is None and not rospy.is_shutdown():
-            pixel = self.uav.detect_red_light()
+            pixel = self.uav.detect_red_light(corners)
             if rospy.Time.now() > deadline:
                 break
             rospy.sleep(0.5)

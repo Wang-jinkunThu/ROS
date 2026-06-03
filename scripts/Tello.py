@@ -496,10 +496,18 @@ class TelloControl:
                 return True
         return False
 
+    # 白板上 3×3 个目标点的世界坐标 (x, z)，y=220 恒定
+    # 左上为原点，x 右为正，z 下为正（世界坐标系中 z↓ 即高度↓）
+    WHITEBOARD_TARGETS = [
+        (-75, 150), (0, 150), (75, 150),
+        (-75, 112.5), (0, 112.5), (75, 112.5),
+        (-75, 75), (0, 75), (75, 75),
+    ]
+
     def detect_whiteboard_corners(self):
         """
         检测白板区域，返回四个角点的像素坐标 [左上,右上,右下,左下]
-        世界坐标：左上(150,164) 右上(350,164) 右下(350,75) 左下(150,75)
+        世界坐标：左上(-75,150) 右上(75,150) 右下(75,75) 左下(-75,75)
         """
         if self.state.image is None:
             return None
@@ -519,20 +527,18 @@ class TelloControl:
                 return None
         pts = approx.reshape(4, 2)
         pts_sorted = sorted(pts, key=lambda p: (p[1], p[0]))
-        top_pts = sorted(pts_sorted[:2], key=lambda p: p[0])
-        bottom_pts = sorted(pts_sorted[2:], key=lambda p: p[0])
-        corners = top_pts + bottom_pts
+        top_pts = sorted(pts_sorted[:2], key=lambda p: p[0])          # [TL, TR]
+        bottom_pts = sorted(pts_sorted[2:], key=lambda p: -p[0])      # [BR, BL]，x 降序
+        corners = top_pts + bottom_pts                                 # [TL, TR, BR, BL]
         return np.array(corners, dtype='float32')
 
     def pixel_to_world(self, u, v, corners):
-        """
-        通过白板角点计算单应性矩阵，将像素坐标 (u,v) 映射到世界坐标 (x,z)
-        """
+        """将像素坐标 (u,v) 映射到世界坐标 (x,z)（白板平面 y=220），并吸附到最近的目标点。"""
         world_pts = np.array([
-            [150, 164],
-            [350, 164],
-            [350, 75],
-            [150, 75]
+            [-75, 150],  # 左上
+            [75, 150],   # 右上
+            [75, 75],    # 右下
+            [-75, 75]    # 左下
         ], dtype='float32')
 
         H, _ = cv2.findHomography(corners, world_pts)
@@ -541,23 +547,22 @@ class TelloControl:
         world = world / world[2]
         x = world[0, 0]
         z = world[1, 0]
-        x = max(150, min(350, x))
-        z = max(75, min(164, z))
-        return x, z
+        x = max(-75, min(75, x))
+        z = max(75, min(150, z))
 
-    def detect_red_light(self):
-        """检测图像中的红色光点（红灯），返回像素坐标 (u, v) 或 None"""
+        # 吸附到最近的 3×3 网格点
+        best = min(self.WHITEBOARD_TARGETS, key=lambda p: (p[0] - x)**2 + (p[1] - z)**2)
+        return best[0], best[1]
+
+    def detect_red_light(self, board_corners=None):
+        """检测图像中的红色光点，返回像素坐标 (u, v) 或 None。可传入 board_corners 过滤板外噪点。"""
         if self.state.image is None:
             return None
         frame = self.state.image.copy()
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        lower_red1 = np.array([0, 100, 100])
-        upper_red1 = np.array([10, 255, 255])
-        lower_red2 = np.array([160, 100, 100])
-        upper_red2 = np.array([180, 255, 255])
-        mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
-        mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
-        mask = cv2.bitwise_or(mask1, mask2)
+        lower_red1 = np.array([0, 56, 244])
+        upper_red1 = np.array([179, 124, 255])
+        mask = cv2.inRange(hsv, lower_red1, upper_red1)
         kernel = np.ones((5, 5), dtype=np.uint8)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -565,13 +570,20 @@ class TelloControl:
         best_cnt = None
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            if area > max_area:
-                max_area = area
-                best_cnt = cnt
+            if area <= max_area:
+                continue
+            M = cv2.moments(cnt)
+            if M["m00"] == 0:
+                continue
+            u = int(M["m10"] / M["m00"])
+            v = int(M["m01"] / M["m00"])
+            if board_corners is not None:
+                inside = cv2.pointPolygonTest(board_corners, (float(u), float(v)), False)
+                if inside < 0:
+                    continue
+            max_area = area
+            best_cnt = cnt
+            best_uv = (u, v)
         if best_cnt is not None:
-            M = cv2.moments(best_cnt)
-            if M["m00"] != 0:
-                u = int(M["m10"] / M["m00"])
-                v = int(M["m01"] / M["m00"])
-                return (u, v)
+            return best_uv
         return None
