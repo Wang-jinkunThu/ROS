@@ -3,6 +3,7 @@
 """
 测试脚本：按照 path.md 规划的路径完成完整任务。
 调用 Tello.py 中的控制方法，参考 my_mission.py 的状态机结构。
+goto_xy() 已改写为先 x 后 y 的移动方式，不再使用 turn_to()。
 """
 
 import rospy
@@ -75,6 +76,9 @@ class StateMachine:
         while not rospy.is_shutdown():
             with self.uav.state.lock:
                 pz = self.uav.state.position.z if self.uav.state.position else init_z
+                
+            assert init_z is not None
+            assert pz is not None
             if pz - init_z > 0.3:
                 rospy.loginfo(f"Takeoff confirmed, height={pz:.2f}m")
                 break
@@ -86,20 +90,25 @@ class StateMachine:
 
         rospy.sleep(2)
 
-        # 上升到 40cm
-        rospy.loginfo("Rising to 40cm...")
-        if not self.uav.set_z(40, tol_cm=20, timeout=15):
-            rospy.logerr("Failed to reach 40cm")
+        # 上升到 53cm
+        rospy.loginfo("Rising to 53cm...")
+        if not self.uav.set_z(53):
+            rospy.logerr("Failed to reach 53cm")
             self.state = "LANDING"
             return
 
         self.state = "ROTATING_BALL"
 
     def do_rotating_ball(self):
-        # 飞向旋转柜观察点
-        rospy.loginfo("Going to rotating ball observation point (-104, -130)...")
-        if not self.uav.goto_xy(-104, -130, tol_cm=20, timeout=30):
+        # 飞向旋转柜观察点 (-102, -181)，高度 53cm
+        rospy.loginfo("Going to rotating ball observation point (-102, -181)...")
+        if not self.uav.goto_xy(-102, -181):
             rospy.logerr("Failed to reach rotating ball point")
+            self.state = "LANDING"
+            return
+
+        if not self.uav.set_z(53):
+            rospy.logerr("Failed to set height 53cm")
             self.state = "LANDING"
             return
 
@@ -107,8 +116,7 @@ class StateMachine:
         rospy.loginfo("Turning CCW 90 deg to face rotating cabinet...")
         with self.uav.state.lock:
             cur_yaw = self.uav.state.yaw or 0
-        target_yaw = cur_yaw + 90
-        if not self.uav.turn_to(target_yaw, tol_deg=10, timeout=20):
+        if not self.uav.turn_to(cur_yaw + 90, tol_deg=10, timeout=20):
             rospy.logerr("Failed to turn to rotating cabinet")
             self.state = "LANDING"
             return
@@ -126,21 +134,26 @@ class StateMachine:
         self.state = "FIXED_BALL"
 
     def do_fixed_ball(self):
-        # 飞向固定柜观察点序列
-        waypoints = [(0, -130), (0, -125), (30, -125)]
+        # 飞向固定柜观察点序列（保持 z=53 不变）
+        waypoints = [(0, -130), (0, -120), (60, -120)]
         for wx, wy in waypoints:
             rospy.loginfo(f"Going to ({wx}, {wy})...")
-            if not self.uav.goto_xy(wx, wy, tol_cm=20, timeout=30):
+            if not self.uav.goto_xy(wx, wy):
                 rospy.logerr(f"Failed to reach ({wx}, {wy})")
                 self.state = "LANDING"
                 return
+
+        # 上升到 118cm
+        if not self.uav.set_z(118):
+            rospy.logerr("Failed to reach 118cm")
+            self.state = "LANDING"
+            return
 
         # 顺时针旋转 90 度，面朝固定柜
         rospy.loginfo("Turning CW 90 deg to face fixed cabinet...")
         with self.uav.state.lock:
             cur_yaw = self.uav.state.yaw or 90
-        target_yaw = cur_yaw - 90
-        if not self.uav.turn_to(target_yaw, tol_deg=10, timeout=20):
+        if not self.uav.turn_to(cur_yaw - 90, tol_deg=10, timeout=20):
             rospy.logerr("Failed to turn to fixed cabinet")
             self.state = "LANDING"
             return
@@ -160,59 +173,63 @@ class StateMachine:
         self.uav.judge_pub.publish(ball_result)
         print(f"[JUDGE] Ball result sent: {ball_result}")
 
-        # 上升至 163cm
-        rospy.loginfo("Rising to 163cm...")
-        if not self.uav.set_z(163, tol_cm=20, timeout=20):
-            rospy.logerr("Failed to reach 163cm")
-            self.state = "LANDING"
-            return
-
         self.state = "FIND_WINDOW"
 
     def do_find_window(self):
-        # 先飞到窗口区域
-        rospy.loginfo("Going to (30, -20)...")
-        if not self.uav.goto_xy(30, -20, tol_cm=20, timeout=30):
-            rospy.logerr("Failed to reach (30, -20)")
+        # 飞向窗户区域
+        approach_points = [(60, -16), (66, -16)]
+        for wx, wy in approach_points:
+            rospy.loginfo(f"Going to ({wx}, {wy})...")
+            if not self.uav.goto_xy(wx, wy):
+                rospy.logerr(f"Failed to reach ({wx}, {wy})")
+                self.state = "LANDING"
+                return
+
+        # 上升到 192cm 检查窗户
+        if not self.uav.set_z(192):
+            rospy.logerr("Failed to reach 192cm")
             self.state = "LANDING"
             return
 
-        # 依次检查三个窗户：从右到左 (x=100, 0, -100)
-        window_points = [(100, -20), (0, -20), (-100, -20)]
+        # 依次检查三个窗户：从右到左
+        window_points = [(66, -16), (0, 0), (-107, -23)]
+        window_heights = [192, 189, 188]
         fire_found = False
-        fire_wx = None
 
-        for wx, wy in window_points:
-            rospy.loginfo(f"Checking window at ({wx}, {wy})...")
-            if not self.uav.goto_xy(wx, wy, tol_cm=20, timeout=30):
+        for (wx, wy), wz in zip(window_points, window_heights):
+            rospy.loginfo(f"Checking window at ({wx}, {wy}), height={wz}cm...")
+            if not self.uav.goto_xy(wx, wy):
                 rospy.logwarn(f"Failed to reach ({wx}, {wy}), skip")
+                continue
+
+            if not self.uav.set_z(wz):
+                rospy.logwarn(f"Failed to set height {wz}cm")
                 continue
 
             rospy.sleep(1)
             if self.uav.detect_fire():
                 rospy.loginfo(f"Fire window detected at ({wx}, {wy})")
                 fire_found = True
-                fire_wx = wx
                 break
             rospy.loginfo(f"No fire at ({wx}, {wy})")
 
-        # 检测到红点则 y 正方向移动 50cm
+        # 检测到红点：先 z 到 152，再 y 方向 +50
         if fire_found:
-            rospy.loginfo("Moving +50cm in y direction...")
-            if not self.uav.move_y(50, tol_cm=20, timeout=15):
-                rospy.logwarn("move_y +50 failed, continuing")
+            rospy.loginfo("Fire detected: setting z=152 then moving y+50...")
+            if not self.uav.set_z(152):
+                rospy.logwarn("set_z(152) failed")
+            if not self.uav.move_y(50):
+                rospy.logwarn("move_y(50) failed")
 
-        # 统一移动到 (0, 50, 163)
+        # 穿过窗户后统一移动到 (0, 50, 163)
         rospy.loginfo("Going to gathering point (0, 50)...")
-        if not self.uav.goto_xy(0, 50, tol_cm=20, timeout=30):
+        if not self.uav.goto_xy(0, 50):
             rospy.logerr("Failed to reach gathering point (0, 50)")
             self.state = "LANDING"
             return
 
-        # 下降到 140cm
-        rospy.loginfo("Descending to 140cm...")
-        if not self.uav.set_z(140, tol_cm=20, timeout=15):
-            rospy.logerr("Failed to reach 140cm")
+        if not self.uav.set_z(163):
+            rospy.logerr("Failed to reach 163cm")
             self.state = "LANDING"
             return
 
@@ -223,8 +240,7 @@ class StateMachine:
         rospy.loginfo("Turning CCW 90 deg to face whiteboard...")
         with self.uav.state.lock:
             cur_yaw = self.uav.state.yaw or 0
-        target_yaw = cur_yaw + 90
-        if not self.uav.turn_to(target_yaw, tol_deg=10, timeout=20):
+        if not self.uav.turn_to(cur_yaw + 90, tol_deg=10, timeout=20):
             rospy.logerr("Failed to turn to whiteboard")
             self.state = "LANDING"
             return
@@ -269,15 +285,12 @@ class StateMachine:
 
         # 飞向目标位置
         rospy.loginfo(f"Going to target ({x_world:.1f}, 50)...")
-        if not self.uav.goto_xy(x_world, 50, tol_cm=20, timeout=30):
+        if not self.uav.goto_xy(x_world, 50):
             rospy.logerr("Failed to reach target position")
             self.state = "LANDING"
             return
 
-        with self.uav.state.lock:
-            cur_z = self.uav.state.position.z * 100.0 if self.uav.state.position else 140
-
-        if not self.uav.set_z(z_world, tol_cm=20, timeout=15):
+        if not self.uav.set_z(z_world):
             rospy.logerr("Failed to set target height")
             self.state = "LANDING"
             return

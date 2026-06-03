@@ -77,103 +77,106 @@ class TelloControl:
     def land(self):         self.send("land")
 
     # ========== 闭环控制方法 ==========
-    def goto_xy(self, target_x_cm, target_y_cm, tol_cm=5, timeout=30):
-        """
-        闭环飞到绝对坐标 (cm),成功返回 True,超时返回 False.
-        """
-        rate = rospy.Rate(10)
-        deadline = rospy.Time.now() + rospy.Duration(timeout)
-        rospy.loginfo(f"Going to ({target_x_cm}, {target_y_cm}) cm")
-        turn_failures = 0
+    def goto_xy(self, target_x_cm, target_y_cm, tol_cm=20, timeout=30):
+        """闭环飞到绝对坐标 (cm)，先 x 后 y，不使用 turn_to。成功返回 True。"""
+        with self.state.lock:
+            if self.state.position is None:
+                rospy.logerr("goto_xy: no position data")
+                return False
+            px = self.state.position.x * 100.0
+            py = self.state.position.y * 100.0
 
-        while not rospy.is_shutdown():
-            if rospy.Time.now() > deadline:
-                rospy.logwarn(f"goto_xy timeout at ({target_x_cm}, {target_y_cm})")
+        dx = target_x_cm - px
+        dy = target_y_cm - py
+
+        rospy.loginfo(f"goto_xy: current=({px:.1f}, {py:.1f})  delta=({dx:.1f}, {dy:.1f})  target=({target_x_cm}, {target_y_cm})")
+
+        if abs(dx) > tol_cm:
+            if not self.move_x(dx, tol_cm=tol_cm, timeout=timeout):
+                rospy.logwarn(f"goto_xy: move_x({dx:.1f}) failed")
                 return False
 
-            with self.state.lock:
-                if self.state.position is None:
-                    rate.sleep()
-                    continue
-                px = self.state.position.x * 100.0
-                py = self.state.position.y * 100.0
+        if abs(dy) > tol_cm:
+            if not self.move_y(dy, tol_cm=tol_cm, timeout=timeout):
+                rospy.logwarn(f"goto_xy: move_y({dy:.1f}) failed")
+                return False
 
-            dx = target_x_cm - px
-            dy = target_y_cm - py
-            dist = math.hypot(dx, dy)
-            if dist < tol_cm:
-                rospy.loginfo(f"Reached ({target_x_cm}, {target_y_cm})")
+        rospy.loginfo(f"goto_xy: reached ({target_x_cm}, {target_y_cm})")
+        return True
+
+    def get_yaw(self):
+        """安全读取当前 yaw，失败返回 None"""
+        with self.state.lock:
+            return self.state.yaw
+
+    def normalize_180(self, deg):
+        """将角度归一化到 [-180, 180)"""
+        deg = deg % 360
+        if deg > 180:
+            deg -= 360
+        return deg
+
+    def turn_to(self, target_deg, tol_deg=5, timeout=10):
+        """
+        两阶段旋转：
+          粗调 — 大步长快速接近目标（max 30° per step）
+          精调 — 小步长消除剩余误差（10° per step）
+        成功返回 True，超时返回 False。
+        """
+        deadline = rospy.Time.now() + rospy.Duration(timeout)
+
+        phase = "coarse"       # coarse → fine → done
+        coarse_step = 30       # 粗调每步转 30°
+        fine_step = 10           # 精调每步转 10°
+
+        rospy.loginfo(f"[simple_turn_to] target={target_deg} deg, tol={tol_deg} deg")
+
+        while not rospy.is_shutdown():
+            # --- 超时检查 ---
+            if rospy.Time.now() > deadline:
+                rospy.logwarn(f"[simple_turn_to] timeout at {target_deg} deg")
                 self.stop()
+                return False
+
+            # --- 读取 yaw ---
+            yaw = self.get_yaw()
+            if yaw is None:
+                rospy.sleep(0.2)
+                continue
+
+            # --- 计算误差 ---
+            err = target_deg - yaw
+            err = self.normalize_180(err)
+
+            rospy.loginfo(f"[simple_turn_to] yaw={yaw:.1f}  target={target_deg}  err={err:+.1f}  phase={phase}")
+
+            # --- 到达判断 ---
+            if abs(err) <= tol_deg:
+                self.stop()
+                rospy.loginfo(f"[simple_turn_to] done: yaw={yaw:.1f} (err={err:.1f})")
                 return True
 
-            target_rad = math.atan2(dy, dx)
-            target_deg = math.degrees(target_rad)
-            if not self.turn_to(target_deg, tol_deg=5, timeout=10):
-                turn_failures += 1
-                if turn_failures >= 3:
-                    rospy.logerr(f"turn_to failed {turn_failures} times, giving up")
-                    return False
-                rospy.logwarn(f"turn_to failed ({turn_failures}/3), retrying...")
-                rospy.sleep(1)
-                continue
-            turn_failures = 0
-
-            step = min(dist, 20.0)
-            self.forward(int(step))
-            rospy.sleep(max(0.3, step / 30.0))
-
-    def turn_to(self, target_yaw_deg, tol_deg=5, timeout=10):
-        """
-        闭环旋转到指定偏航角（度），成功返回 True。
-        """
-        rate = rospy.Rate(10)
-        deadline = rospy.Time.now() + rospy.Duration(timeout)
-        prev_yaw = None
-        stable_count = 0
-
-        while not rospy.is_shutdown():
-            if rospy.Time.now() > deadline:
-                rospy.logwarn(f"turn_to timeout at {target_yaw_deg} deg")
-                return False
-
-            with self.state.lock:
-                if self.state.yaw is None:
-                    rate.sleep()
-                    continue
-                yaw = self.state.yaw
-            err = target_yaw_deg - yaw
-            if err > 180:
-                err -= 360
-            if err < -180:
-                err += 360
-
-            # 稳定性检查：连续 3 次在容差内才算收敛
-            if abs(err) < tol_deg:
-                stable_count += 1
-                if stable_count >= 3:
-                    self.stop()
-                    return True
+            # --- 选择步长 ---
+            if abs(err) <= 25:
+                phase = "fine"
             else:
-                stable_count = 0
+                phase = "coarse"
 
-            # 检测异常跳变：yaw 变化远超命令量，等待下一次读数
-            if prev_yaw is not None:
-                yaw_delta = abs(yaw - prev_yaw)
-                if yaw_delta > 25:
-                    rospy.loginfo_throttle(1.0, f"turn_to: suspicious yaw jump {prev_yaw:.1f}->{yaw:.1f}, waiting")
-                    prev_yaw = yaw
-                    rospy.sleep(0.3)
-                    continue
+            if phase == "coarse":
+                step = min(abs(err), coarse_step)
+            else:
+                step = min(abs(err), fine_step)
 
-            step = min(int(abs(err) * 0.6), 10)
-            step = max(step, 3)
-            rospy.loginfo_throttle(0.5, f"turn_to: yaw={yaw:.1f}  target={target_yaw_deg:.1f}  err={err:.1f}  step={step}  dir={'ccw' if err > 0 else 'cw'}")
+            # --- 发旋转指令 ---
             if err > 0:
-                self.ccw(step)
+                rospy.loginfo(f"  → ccw {int(step)}")
+                self.ccw(int(step))
             else:
-                self.cw(step)
-            prev_yaw = yaw
-            rospy.sleep(0.5)
+                rospy.loginfo(f"  → cw {int(step)}")
+                self.cw(int(step))
+
+            # 等待无人机执行：粗调等更久
+            rospy.sleep(1.2 if phase == "coarse" else 0.8)
 
     def move_z(self, delta_cm, tol_cm=5, timeout=15):
         """z 方向上移动相对高度，delta_cm > 0 上升，< 0 下降，成功返回 True。"""
