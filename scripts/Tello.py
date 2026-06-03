@@ -229,12 +229,34 @@ class TelloControl:
             else:
                 stable_count = 0
 
-            step = max(min(int(abs(dz) * 0.5), 15), 5)
+            step = max(min(int(abs(dz) * 0.5), 50), 20)
             if dz > 0:
                 self.up(step)
             else:
                 self.down(step)
             rospy.sleep(0.5)
+
+    def _map_world_axis(self, delta, yaw):
+        """根据 yaw 选择机体指令来逼近世界坐标轴移动。
+        返回 (cmd, step)，cmd 为 'forward'/'back'/'left'/'right'。"""
+        yaw = yaw % 360
+        if yaw > 180:
+            yaw -= 360
+
+        if -45 <= yaw <= 45:           # 机头朝 +X 附近
+            return ('forward' if delta > 0 else 'back')
+        elif 45 < yaw <= 135:          # 机头朝 +Y 附近
+            return ('right' if delta > 0 else 'left')
+        elif yaw > 135 or yaw < -135:  # 机头朝 -X 附近
+            return ('back' if delta > 0 else 'forward')
+        else:                          # -135 <= yaw < -45，机头朝 -Y 附近
+            return ('left' if delta > 0 else 'right')
+
+    def _yaw_map_cmd(self, cmd, step):
+        if cmd == 'forward':   self.forward(step)
+        elif cmd == 'back':    self.back(step)
+        elif cmd == 'left':    self.left(step)
+        elif cmd == 'right':   self.right(step)
 
     def move_x(self, delta_cm, tol_cm=5, timeout=15):
         """x 方向上水平移动相对距离（世界坐标系），delta_cm > 0 向 +x 方向，成功返回 True。"""
@@ -273,10 +295,11 @@ class TelloControl:
                 return False
 
             with self.state.lock:
-                if self.state.position is None:
+                if self.state.position is None or self.state.yaw is None:
                     rate.sleep()
                     continue
                 px = self.state.position.x * 100.0
+                yaw = self.state.yaw
 
             dx = target_x - px
             if abs(dx) < tol_cm:
@@ -289,10 +312,8 @@ class TelloControl:
                 stable_count = 0
 
             step = max(min(int(abs(dx) * 0.5), 50), 20)
-            if dx > 0:
-                self.right(step)
-            else:
-                self.left(step)
+            cmd = self._map_world_axis(dx, yaw)
+            self._yaw_map_cmd(cmd, step)
             rospy.sleep(0.5)
 
     def move_y(self, delta_cm, tol_cm=5, timeout=15):
@@ -332,10 +353,11 @@ class TelloControl:
                 return False
 
             with self.state.lock:
-                if self.state.position is None:
+                if self.state.position is None or self.state.yaw is None:
                     rate.sleep()
                     continue
                 py = self.state.position.y * 100.0
+                yaw = self.state.yaw
 
             dy = target_y - py
             if abs(dy) < tol_cm:
@@ -348,10 +370,10 @@ class TelloControl:
                 stable_count = 0
 
             step = max(min(int(abs(dy) * 0.5), 50), 20)
-            if dy > 0:
-                self.forward(step)
-            else:
-                self.back(step)
+            # y 轴映射：在 x 轴基础上偏移 90°
+            yaw_shifted = yaw - 90
+            cmd = self._map_world_axis(dy, yaw_shifted)
+            self._yaw_map_cmd(cmd, step)
             rospy.sleep(0.5)
 
     # ========== 视觉检测方法 ==========
