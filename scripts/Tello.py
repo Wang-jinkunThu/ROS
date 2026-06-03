@@ -104,19 +104,19 @@ class TelloControl:
         rospy.loginfo(f"goto_xy: reached ({target_x_cm}, {target_y_cm})")
         return True
 
-    def get_yaw(self):
+    def _get_yaw(self):
         """安全读取当前 yaw，失败返回 None"""
         with self.state.lock:
             return self.state.yaw
 
-    def normalize_180(self, deg):
+    def _normalize_180(self, deg):
         """将角度归一化到 [-180, 180)"""
         deg = deg % 360
         if deg > 180:
             deg -= 360
         return deg
 
-    def turn_to(self, target_deg, tol_deg=5, timeout=10):
+    def turn_to(self, target_deg, tol_deg=10, timeout=10):
         """
         两阶段旋转：
           粗调 — 大步长快速接近目标（max 30° per step）
@@ -139,14 +139,14 @@ class TelloControl:
                 return False
 
             # --- 读取 yaw ---
-            yaw = self.get_yaw()
+            yaw = self._get_yaw()
             if yaw is None:
                 rospy.sleep(0.2)
                 continue
 
             # --- 计算误差 ---
             err = target_deg - yaw
-            err = self.normalize_180(err)
+            err = self._normalize_180(err)
 
             rospy.loginfo(f"[simple_turn_to] yaw={yaw:.1f}  target={target_deg}  err={err:+.1f}  phase={phase}")
 
@@ -178,7 +178,7 @@ class TelloControl:
             # 等待无人机执行：粗调等更久
             rospy.sleep(1.2 if phase == "coarse" else 0.8)
 
-    def move_z(self, delta_cm, tol_cm=5, timeout=15):
+    def move_z(self, delta_cm, tol_cm=15, timeout=15):
         """z 方向上移动相对高度，delta_cm > 0 上升，< 0 下降，成功返回 True。"""
         rate = rospy.Rate(10)
         deadline = rospy.Time.now() + rospy.Duration(timeout)
@@ -241,11 +241,8 @@ class TelloControl:
 
     def _map_world_axis(self, delta, yaw):
         """根据 yaw 选择机体指令来逼近世界坐标轴移动。
-        返回 (cmd, step)，cmd 为 'forward'/'back'/'left'/'right'。"""
-        yaw = yaw % 360
-        if yaw > 180:
-            yaw -= 360
-
+        返回 (cmd, step),cmd 为 'forward'/'back'/'left'/'right'。"""
+        yaw = self._normalize_180(yaw)
         if -45 <= yaw <= 45:           # 机头朝 +X 附近
             return ('forward' if delta > 0 else 'back')
         elif 45 < yaw <= 135:          # 机头朝 +Y 附近
@@ -261,7 +258,7 @@ class TelloControl:
         elif cmd == 'left':    self.left(step)
         elif cmd == 'right':   self.right(step)
 
-    def move_x(self, delta_cm, tol_cm=5, timeout=15):
+    def move_x(self, delta_cm, tol_cm=15, timeout=15):
         """x 方向上水平移动相对距离（世界坐标系），delta_cm > 0 向 +x 方向，成功返回 True。"""
         rate = rospy.Rate(10)
         deadline = rospy.Time.now() + rospy.Duration(timeout)
@@ -319,7 +316,7 @@ class TelloControl:
             self._yaw_map_cmd(cmd, step)
             rospy.sleep(0.5)
 
-    def move_y(self, delta_cm, tol_cm=5, timeout=15):
+    def move_y(self, delta_cm, tol_cm=15, timeout=15):
         """y 方向上水平移动相对距离（世界坐标系），delta_cm > 0 向 +y 方向，成功返回 True。"""
         rate = rospy.Rate(10)
         deadline = rospy.Time.now() + rospy.Duration(timeout)

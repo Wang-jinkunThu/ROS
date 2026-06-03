@@ -76,7 +76,7 @@ class StateMachine:
         while not rospy.is_shutdown():
             with self.uav.state.lock:
                 pz = self.uav.state.position.z if self.uav.state.position else init_z
-                
+
             assert init_z is not None
             assert pz is not None
             if pz - init_z > 0.3:
@@ -107,11 +107,6 @@ class StateMachine:
             self.state = "LANDING"
             return
 
-        if not self.uav.set_z(53):
-            rospy.logerr("Failed to set height 53cm")
-            self.state = "LANDING"
-            return
-
         # 逆时针旋转 90 度，面朝旋转柜
         rospy.loginfo("Turning CCW 90 deg to face rotating cabinet...")
         with self.uav.state.lock:
@@ -122,8 +117,8 @@ class StateMachine:
             return
 
         # 悬停 10 秒检测球
-        rospy.loginfo("Hovering 10s, detecting ball color...")
-        rospy.sleep(10)
+        rospy.loginfo("Hovering 3s, detecting ball color...")
+        rospy.sleep(3)
         ball1 = self.uav.wait_for_ball(timeout=10)
         if ball1 is None:
             rospy.logwarn("Rotating ball not detected, set to unknown")
@@ -135,7 +130,7 @@ class StateMachine:
 
     def do_fixed_ball(self):
         # 飞向固定柜观察点序列（保持 z=53 不变）
-        waypoints = [(0, -130), (0, -120), (60, -120)]
+        waypoints = [(60, -181), (60, -120)]
         for wx, wy in waypoints:
             rospy.loginfo(f"Going to ({wx}, {wy})...")
             if not self.uav.goto_xy(wx, wy):
@@ -160,7 +155,7 @@ class StateMachine:
 
         # 悬停 10 秒检测球
         rospy.loginfo("Hovering 10s, detecting ball color...")
-        rospy.sleep(10)
+        rospy.sleep(3)
         ball2 = self.uav.wait_for_ball(timeout=10)
         if ball2 is None:
             rospy.logwarn("Fixed ball not detected, set to unknown")
