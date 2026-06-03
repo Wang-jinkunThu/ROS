@@ -258,7 +258,7 @@ class TelloControl:
         elif cmd == 'left':    self.left(step)
         elif cmd == 'right':   self.right(step)
 
-    def move_x(self, delta_cm, tol_cm=15, timeout=15):
+    def move_x(self, delta_cm, tol_cm=20, timeout=15):
         """x 方向上水平移动相对距离（世界坐标系），delta_cm > 0 向 +x 方向，成功返回 True。"""
         rate = rospy.Rate(10)
         deadline = rospy.Time.now() + rospy.Duration(timeout)
@@ -311,12 +311,12 @@ class TelloControl:
             else:
                 stable_count = 0
 
-            step = max(min(int(abs(dx) * 0.5), 50), 20)
+            step = max(min(int(abs(dx) * 0.4), 30), 20)
             cmd = self._map_world_axis(dx, yaw)
             self._yaw_map_cmd(cmd, step)
-            rospy.sleep(0.5)
+            rospy.sleep(max(step / 20.0, 0.5))
 
-    def move_y(self, delta_cm, tol_cm=15, timeout=15):
+    def move_y(self, delta_cm, tol_cm=20, timeout=15):
         """y 方向上水平移动相对距离（世界坐标系），delta_cm > 0 向 +y 方向，成功返回 True。"""
         rate = rospy.Rate(10)
         deadline = rospy.Time.now() + rospy.Duration(timeout)
@@ -369,12 +369,12 @@ class TelloControl:
             else:
                 stable_count = 0
 
-            step = max(min(int(abs(dy) * 0.5), 50), 20)
+            step = max(min(int(abs(dy) * 0.4), 30), 20)
             # y 轴映射：在 x 轴基础上偏移 90°
             yaw_shifted = yaw - 90
             cmd = self._map_world_axis(dy, yaw_shifted)
             self._yaw_map_cmd(cmd, step)
-            rospy.sleep(0.5)
+            rospy.sleep(max(step / 20.0, 0.5))
 
     def set_z(self, target_cm, tol_cm=20, timeout=15):
         """飞到指定绝对高度 target_cm（cm），成功返回 True。"""
