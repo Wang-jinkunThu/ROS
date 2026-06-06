@@ -19,8 +19,8 @@ class StateMachine:
             try:
                 if self.state == "TAKEOFF":
                     self.do_takeoff()
-                elif self.state == "DETECT_BOLL":
-                    self.do_detect_boll()
+                elif self.state == "DETECT_BALL":
+                    self.do_detect_ball()
                 elif self.state == "FIND_WINDOW":
                     self.do_find_window()
                 elif self.state == "DETECT_LIGHT":
@@ -67,7 +67,7 @@ class StateMachine:
         rospy.sleep(2)
         self.state = "DETECT_LIGHT"
 
-    def do_detect_boll(self):
+    def do_detect_ball(self):
         # 飞向旋转柜观察点 (-102, -200)，高度 50cm，角度y+
         rospy.loginfo("Going to rotating ball observation point (-102, -181)...")
         self.uav.position_change(-1.02, -1.85, 0.55, 90)
@@ -191,7 +191,7 @@ class StateMachine:
 # 主函数
 # ============================================================
 if __name__ == "__main__":
-    rospy.init_node("test_my_mission_node", anonymous=False)
+    rospy.init_node("my_mission_node", anonymous=False)
     name = rospy.get_param('~name', "")
     mission = StateMachine(name)
     mission.run()
