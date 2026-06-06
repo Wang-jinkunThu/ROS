@@ -71,7 +71,7 @@ class TelloControl:
         self.target_y = -1.8
         self.target_z = 0.7
         self.target_yaw = 90.0
-        self.ctrl_thread = threading.Thread(target=self.position_control_demo)
+        self.ctrl_thread = threading.Thread(target=self.position_move)
         self.ctrl_thread.daemon = True
         self.ctrl_thread.start()
     # ========== 基本控制指令 ==========
@@ -89,7 +89,8 @@ class TelloControl:
     def stop(self):         self.send("stop")
     def takeoff(self):      self.send("takeoff")
     def land(self):         self.send("land")
-    def position_control_demo(self):
+
+    def position_move(self):
         rate = rospy.Rate(2)  # 控制频率 2 Hz
         print("=== 前往目标位置 Demo 已启动 ===")
 
@@ -187,7 +188,7 @@ class TelloControl:
             rospy.sleep(0.3)
             # rate.sleep()   #是否可以修改？
 
-    def position_change(self, x, y, z, yaw):
+    def target_change(self, x, y, z, yaw):
         self.target_x = x
         self.target_y = y
         self.target_z = z

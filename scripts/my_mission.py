@@ -71,8 +71,8 @@ class StateMachine:
     def do_detect_boll(self):
         # 飞向旋转柜观察点 (-102, -200)，高度 50cm，角度y+
         rospy.loginfo("Going to rotating ball observation point (-102, -181)...")
-        self.uav.position_change(-1.02, -1.85, 0.5, 90)
-        self.uav.position_control_demo()
+        self.uav.target_change(-1.02, -1.85, 0.5, 90)
+        self.uav.position_move()
 
         # 悬停 10 秒检测球
         rospy.loginfo("Hovering 10s, detecting ball color...")
@@ -87,10 +87,10 @@ class StateMachine:
         self.ball1 = ball1
 
         # 飞向固定柜观察点 (80, -180)，高度 150cm，角度x+
-        self.uav.position_change(0.5, -1.35, 1.15, 90)
-        self.uav.position_control_demo()
-        self.uav.position_change(0.5, -1.35, 1.15, 0)
-        self.uav.position_control_demo()
+        self.uav.target_change(0.5, -1.35, 1.15, 90)
+        self.uav.position_move()
+        self.uav.target_change(0.5, -1.35, 1.15, 0)
+        self.uav.position_move()
 
         # 悬停 10 秒检测球
         rospy.loginfo("Hovering 10s, detecting ball color...")
@@ -117,8 +117,8 @@ class StateMachine:
 
         for wx in window_position:
             rospy.loginfo(f"Checking window at ({wx}, -0.4, 1.85)...")
-            self.uav.position_change(wx, -0.4, 1.85, 90)
-            self.uav.position_control_demo()
+            self.uav.target_change(wx, -0.4, 1.85, 90)
+            self.uav.position_move()
             rospy.sleep(3)
 
             if self.uav.detect_fire(timeout = 2):
@@ -129,10 +129,10 @@ class StateMachine:
 
         # 穿过火窗
         if fire_found:
-            self.uav.position_change(wx, -0.4, 1.5, 90) # 高度下降
-            self.uav.position_control_demo()
-            self.uav.position_change(wx, 0.4, 1.5, 90) # 穿过火窗
-            self.uav.position_control_demo()
+            self.uav.target_change(wx, -0.4, 1.5, 90) # 高度下降
+            self.uav.position_move()
+            self.uav.target_change(wx, 0.4, 1.5, 90) # 穿过火窗
+            self.uav.position_move()
         else:
             self.state = "LANDING"
 
@@ -141,8 +141,8 @@ class StateMachine:
     def do_detect_light(self):
         rospy.sleep(1)
         # 移动到 (0.1, 50, 163),角度y+
-        self.uav.position_change(0.1, 0.3, 1.63, 90)
-        self.uav.position_control_demo()
+        self.uav.target_change(0.1, 0.3, 1.63, 90)
+        self.uav.position_move()
         obs_x, obs_y, obs_z = 0.1, 0.3, 1.63
         
         # 依次检测 3 次红灯
@@ -160,8 +160,8 @@ class StateMachine:
             rospy.loginfo(f"LIGHT_ON target: ({target_x:.1f}, {target_y:.1f}, {target_z:.1f}) cm")
 
             # 飞向目标位置（cm → m）
-            self.uav.position_change(target_x / 100, target_y / 100, target_z / 100 + 0.1, 90)
-            self.uav.position_control_demo()
+            self.uav.target_change(target_x / 100, target_y / 100, target_z / 100 + 0.1, 90)
+            self.uav.position_move()
 
             # 发送裁判机目标
             self.uav.judge_pub.publish(f"target{light_num}")
@@ -171,8 +171,8 @@ class StateMachine:
             # 回到观察点（最后一次不需要返回）
             if light_num < 3:
                 rospy.loginfo(f"Returning to observation point...")
-                self.uav.position_change(obs_x, obs_y, obs_z, 90)
-                self.uav.position_control_demo()
+                self.uav.target_change(obs_x, obs_y, obs_z, 90)
+                self.uav.position_move()
 
         rospy.sleep(2)
 
@@ -186,8 +186,8 @@ class StateMachine:
     
     def do_finish(self):
         rospy.loginfo("Landing...")
-        self.uav.position_change(2.2, 2.2, 0.3, 90)
-        self.uav.position_control_demo()
+        self.uav.target_change(2.2, 2.2, 0.3, 90)
+        self.uav.position_move()
         self.uav.land()
         rospy.sleep(3)
 
