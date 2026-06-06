@@ -10,7 +10,36 @@ import os
 import cv2
 import numpy as np
 
-TEMPLATE_PATH = "template/EMPTY.png"  # 替换为实际模板路径
+TEMPLATES = {
+    "EMPTY":     ("template/EMPTY.png",     (255, 0, 0)),      # 蓝
+    "LIGHT_ON":  ("template/LIGHT_ON.png",  (0, 255, 0)),      # 绿
+    "LIGHT_OFF": ("template/LIGHT_OFF.png", (0, 0, 255)),      # 红
+}
+
+# 若一个类型有多张样张，覆盖掉上面同名 key 即可（用列表替代单路径）
+# 示例：LIGHT_ON 有 3 种样张，EMPTY 有 2 种
+# TEMPLATES = {
+#     "EMPTY":     (["template/EMPTY_1.png", "template/EMPTY_2.png"], (255, 0, 0)),
+#     "LIGHT_ON":  (["template/LIGHT_ON_a.png", "template/LIGHT_ON_b.png", "template/LIGHT_ON_c.png"], (0, 255, 0)),
+#     "LIGHT_OFF": ("template/LIGHT_OFF.png", (0, 0, 255)),
+# }
+
+THRESHOLD = 0.8
+
+
+def match_template(gray_img, gray_tmpl):
+    """匹配单个模板，返回 (x, y, confidence) 列表"""
+    th, tw = gray_tmpl.shape
+    result = cv2.matchTemplate(gray_img, gray_tmpl, cv2.TM_CCOEFF_NORMED)
+    ys, xs = np.where(result >= THRESHOLD)
+
+    # NMS
+    min_dist = min(tw, th) // 2
+    keep = []
+    for x, y in zip(xs, ys):
+        if all(np.hypot(x - k[0], y - k[1]) > min_dist for k in keep):
+            keep.append((x, y, result[y, x]))
+    return keep
 
 
 def main():
@@ -19,45 +48,37 @@ def main():
         sys.exit(1)
 
     img_path = sys.argv[1]
-    tmpl_path = TEMPLATE_PATH
-
     bgr = cv2.imread(img_path)
-    template = cv2.imread(tmpl_path)
     if bgr is None:
         print(f"无法读取图片: {img_path}")
         sys.exit(1)
-    if template is None:
-        print(f"无法读取模板: {tmpl_path}")
-        sys.exit(1)
-
-    th, tw = template.shape[:2]
-    if th > bgr.shape[0] or tw > bgr.shape[1]:
-        print("模板尺寸大于原图，无法匹配")
-        sys.exit(1)
 
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-    gray_tmpl = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+    total = 0
 
-    result = cv2.matchTemplate(gray, gray_tmpl, cv2.TM_CCOEFF_NORMED)
-    threshold = 0.8
-    locations = np.where(result >= threshold)
-    locations = list(zip(*locations[::-1]))  # (x, y) 列表
+    for name, (paths, color) in TEMPLATES.items():
+        if isinstance(paths, str):
+            paths = [paths]
 
-    # 非极大值抑制，避免重叠框
-    min_dist = min(tw, th) // 2
-    keep = []
-    for loc in locations:
-        if all(np.hypot(loc[0] - k[0], loc[1] - k[1]) > min_dist for k in keep):
-            keep.append(loc)
+        for tmpl_path in paths:
+            template = cv2.imread(tmpl_path)
+            if template is None:
+                print(f"无法读取模板: {tmpl_path}，跳过")
+                continue
 
-    print(f"检测到 {len(keep)} 个模板匹配")
+            gray_tmpl = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+            matches = match_template(gray, gray_tmpl)
 
-    for i, (x, y) in enumerate(keep):
-        conf = result[y, x]
-        print(f"  [{i+1}] 位置: ({x}, {y})  置信度: {conf:.4f}")
-        cv2.rectangle(bgr, (x, y), (x + tw, y + th), (0, 0, 255), 3)
-        cv2.putText(bgr, f"{conf:.3f}", (x, y - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            print(f"[{name}] 模板 {tmpl_path}: {len(matches)} 个匹配")
+            for i, (x, y, conf) in enumerate(matches):
+                print(f"    [{i + 1}] 位置: ({x}, {y})  置信度: {conf:.4f}")
+                th, tw = gray_tmpl.shape
+                cv2.rectangle(bgr, (x, y), (x + tw, y + th), color, 3)
+                cv2.putText(bgr, f"{name} {conf:.2f}", (x, y - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            total += len(matches)
+
+    print(f"\n共检测到 {total} 个目标")
 
     base = os.path.splitext(os.path.basename(img_path))[0]
     out_path = os.path.join(os.path.dirname(img_path), f"{base}_template_match.jpg")
