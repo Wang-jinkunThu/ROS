@@ -281,8 +281,8 @@ class TelloControl:
     # 模板匹配配置：类型 → 模板路径列表
     TEMPLATE_PATHS = {
         "EMPTY":     ["template/EMPTY_1.png", "template/EMPTY_2.png"],
-        "LIGHT_ON":  ["template/LIGHT_ON.png"],
-        "LIGHT_OFF": ["template/LIGHT_OFF_1.png", "template/LIGHT_OFF_2.png", "template/LIGHT_OFF_3.png"],
+        "LIGHT_ON":  ["template/LIGHT_ON_1.png", "template/LIGHT_ON_2.png"],
+        "LIGHT_OFF": ["template/LIGHT_OFF_1.png", "template/LIGHT_OFF_2.png", "template/LIGHT_OFF_3.png", "template/LIGHT_OFF_4.png"],
     }
     TEMPLATE_THRESHOLD = 0.8
 
@@ -327,6 +327,9 @@ class TelloControl:
 
             frame = self.state.image.copy()
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            cv2.imwrite(f"./image/gray_{timestamp}.jpg", gray)
+
             matches = self._match_templates(gray)
 
             # 期望检测到 9 个格子点，允许少量误差
@@ -336,15 +339,39 @@ class TelloControl:
                     return None
                 continue
 
-            # 若多于 9 个，取置信度最高的 9 个
-            best9 = sorted(matches, key=lambda m: -m[2])[:9]
-            # 按像素位置排序：行优先（从上到下，从左到右），对应 WHITEBOARD_TARGETS
-            best9.sort(key=lambda m: (m[1], m[0]))  # (y, x)
+            # 取置信度最高的若干个点（至少 9 个）
+            best = sorted(matches, key=lambda m: -m[2])[:max(len(matches), 9)]
 
-            for i, m in enumerate(best9):
+            # 用 x/y 极值确定 3×3 点阵的包围盒
+            xs = [m[0] for m in best]
+            ys = [m[1] for m in best]
+            x_min, x_max = min(xs), max(xs)
+            y_min, y_max = min(ys), max(ys)
+
+            if x_max - x_min < 1 or y_max - y_min < 1:
+                rospy.sleep(0.5)
+                continue
+
+            cell_w = (x_max - x_min) / 3.0
+            cell_h = (y_max - y_min) / 3.0
+
+            # 将每个点分配到最近的网格单元 (row, col)
+            grid_map = {}  # (row, col) → match
+            for m in best:
+                col = int((m[0] - x_min) / cell_w)
+                row = int((m[1] - y_min) / cell_h)
+                col = max(0, min(2, col))
+                row = max(0, min(2, row))
+                key = (row, col)
+                if key not in grid_map or m[2] > grid_map[key][2]:
+                    grid_map[key] = m
+
+            # 查找 LIGHT_ON 对应的网格位置
+            for (row, col), m in grid_map.items():
                 if m[3] == "LIGHT_ON":
+                    i = row * 3 + col
                     world_x, world_y, world_z = self.WHITEBOARD_TARGETS[i]
-                    rospy.loginfo(f"Whiteboard LIGHT_ON at grid[{i}] → target ({world_x:.1f}, {world_y:.1f}, {world_z:.1f})")
+                    rospy.loginfo(f"Whiteboard LIGHT_ON at grid({row},{col}) → target ({world_x:.1f}, {world_y:.1f}, {world_z:.1f})")
                     return (world_x, world_y, world_z)
 
             rospy.logwarn("Whiteboard 3×3 detected but no LIGHT_ON found")
