@@ -5,6 +5,8 @@ import math
 import threading
 import rospy
 import cv2
+import os
+import time
 import numpy as np
 from std_msgs.msg import String
 from sensor_msgs.msg import Image
@@ -40,6 +42,11 @@ class TelloState:
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
         with self.lock:
             self.image = frame
+        try:
+            cv2.imshow("Tello Image", frame)
+            cv2.waitKey(1)
+        except cv2.error:
+            pass
 
     def pose_callback(self, msg: PoseStamped):
         yaw_deg = self.quat_to_yaw(msg.pose.orientation)
@@ -59,7 +66,14 @@ class TelloControl:
 
         self.pub = rospy.Publisher(f"{name}/sdk_cmd", String, queue_size=1)
         self.judge_pub = rospy.Publisher(f"{name}/judge", String, queue_size=1)
-
+        
+        self.target_x = -1.3
+        self.target_y = -1.8
+        self.target_z = 0.7
+        self.target_yaw = 90.0
+        self.ctrl_thread = threading.Thread(target=self.position_control_demo)
+        self.ctrl_thread.daemon = True
+        self.ctrl_thread.start()
     # ========== 基本控制指令 ==========
     def send(self, cmd):
         self.pub.publish(cmd)
@@ -75,354 +89,109 @@ class TelloControl:
     def stop(self):         self.send("stop")
     def takeoff(self):      self.send("takeoff")
     def land(self):         self.send("land")
-
-    # ========== 闭环控制方法 ==========
-    def goto_xy(self, target_x_cm, target_y_cm, tol_cm=20, timeout=30):
-        """闭环飞到绝对坐标 (cm)，先 x 后 y，不使用 turn_to。成功返回 True。"""
-        with self.state.lock:
-            if self.state.position is None:
-                rospy.logerr("goto_xy: no position data")
-                return False
-            px = self.state.position.x * 100.0
-            py = self.state.position.y * 100.0
-
-        dx = target_x_cm - px
-        dy = target_y_cm - py
-
-        rospy.loginfo(f"goto_xy: current=({px:.1f}, {py:.1f})  delta=({dx:.1f}, {dy:.1f})  target=({target_x_cm}, {target_y_cm})")
-
-        if abs(dx) > tol_cm:
-            if not self.move_x(dx, tol_cm=tol_cm, timeout=timeout):
-                rospy.logwarn(f"goto_xy: move_x({dx:.1f}) failed")
-                return False
-
-        if abs(dy) > tol_cm:
-            if not self.move_y(dy, tol_cm=tol_cm, timeout=timeout):
-                rospy.logwarn(f"goto_xy: move_y({dy:.1f}) failed")
-                return False
-
-        rospy.loginfo(f"goto_xy: reached ({target_x_cm}, {target_y_cm})")
-        return True
-
-    def _get_yaw(self):
-        """安全读取当前 yaw，失败返回 None"""
-        with self.state.lock:
-            return self.state.yaw
-
-    def _normalize_180(self, deg):
-        """将角度归一化到 [-180, 180)"""
-        deg = deg % 360
-        if deg > 180:
-            deg -= 360
-        return deg
-
-    def turn_to(self, target_deg, tol_deg=10, timeout=10):
-        """
-        两阶段旋转：
-          粗调 — 大步长快速接近目标（max 30° per step）
-          精调 — 小步长消除剩余误差（10° per step）
-        成功返回 True，超时返回 False。
-        """
-        deadline = rospy.Time.now() + rospy.Duration(timeout)
-
-        phase = "coarse"       # coarse → fine → done
-        coarse_step = 30       # 粗调每步转 30°
-        fine_step = 10           # 精调每步转 10°
-
-        rospy.loginfo(f"[simple_turn_to] target={target_deg} deg, tol={tol_deg} deg")
+    def position_control_demo(self):
+        rate = rospy.Rate(2)  # 控制频率 2 Hz
+        print("=== 前往目标位置 Demo 已启动 ===")
 
         while not rospy.is_shutdown():
-            # --- 超时检查 ---
-            if rospy.Time.now() > deadline:
-                rospy.logwarn(f"[simple_turn_to] timeout at {target_deg} deg")
-                self.stop()
-                return False
-
-            # --- 读取 yaw ---
-            yaw = self._get_yaw()
-            if yaw is None:
-                rospy.sleep(0.2)
+            rate.sleep()
+            if self.state.position is None or self.state.yaw is None:
                 continue
 
-            # --- 计算误差 ---
-            err = target_deg - yaw
-            err = self._normalize_180(err)
+            with self.state.lock:
+                px = self.state.position.x
+                py = self.state.position.y
+                pz = self.state.position.z
+                yaw = self.state.yaw
 
-            rospy.loginfo(f"[simple_turn_to] yaw={yaw:.1f}  target={target_deg}  err={err:+.1f}  phase={phase}")
+            # ----------------------
+            #          YAW角度 控制
+            # ----------------------
+            yaw_err = self.target_yaw - yaw
+            if yaw_err > 180: yaw_err -= 360
+            if yaw_err < -180: yaw_err += 360
 
-            # --- 到达判断 ---
-            if abs(err) <= tol_deg:
+            if abs(yaw_err) > 10:
+                if abs(yaw_err) > 30:
+                    step_yaw = 20
+                else:
+                    step_yaw = 10
+                if yaw_err > 0: 
+                    self.ccw(step_yaw)
+                    print("yaw err: ", yaw_err, ", ccw ", step_yaw)
+                    rospy.sleep(0.5)
+                else:           
+                    self.cw(step_yaw)
+                    print("yaw err: ", yaw_err, ", cw ", step_yaw)
+                    rospy.sleep(0.5)
+                continue
+
+            # ----------------------
+            #        位置控制
+            # ----------------------
+            ex = self.target_x - px
+            ey = self.target_y - py
+            ez = self.target_z - pz
+            # ---- 到达目标 ----
+            if abs(ex) < 0.2 and abs(ey) < 0.2 and abs(ez) < 0.2 and abs(yaw_err) < 10:
+                print("== 到达目标位置 ==")
                 self.stop()
-                rospy.loginfo(f"[simple_turn_to] done: yaw={yaw:.1f} (err={err:.1f})")
-                return True
+                rate.sleep()
+                break
 
-            # --- 选择步长 ---
-            if abs(err) <= 25:
-                phase = "fine"
-            else:
-                phase = "coarse"
+            # X 控制
+            if abs(ex) >= 0.2:
+                if abs(ex) > 0.8:
+                    step_x = 0.5
+                else:
+                    step_x = 0.2
+                if ex > 0: 
+                    self.right(int(step_x * 100))
+                    print("x err: ", ex, ", right ", step_x * 100)
+                else:      
+                    self.left(int(step_x * 100))
+                    print("x err: ", ex, ", left ", step_x * 100)
+                rospy.sleep(0.3)
+                continue
 
-            if phase == "coarse":
-                step = min(abs(err), coarse_step)
-            else:
-                step = min(abs(err), fine_step)
+            # Y 控制
+            if abs(ey) >= 0.2:
+                if abs(ey) > 0.8:
+                    step_y = 0.5
+                else:
+                    step_y = 0.2
+                if ey > 0: 
+                    self.forward(int(step_y * 100))
+                    print("y err: ", ey, ", forward ", step_y * 100)
+                else:      
+                    self.back(int(step_y * 100))
+                    print("y err: ", ey, ", back ", step_y * 100)
+                rospy.sleep(0.3)
+                continue
 
-            # --- 发旋转指令 ---
-            if err > 0:
-                rospy.loginfo(f"  → ccw {int(step)}")
-                self.ccw(int(step))
-            else:
-                rospy.loginfo(f"  → cw {int(step)}")
-                self.cw(int(step))
+            # z 控制
+            if abs(ez) >= 0.2:
+                if abs(ez) > 0.8:
+                    step_z = 0.5
+                else:
+                    step_z = 0.2
+                if ez > 0: 
+                    self.up(step_z * 100)
+                    print("z err: ", ez, ", up ", step_z * 100)
+                else:      
+                    self.down(step_z * 100)
+                    print("z err: ", ez, ", down ", step_z * 100)
+                rospy.sleep(0.3)
+                continue
 
-            # 等待无人机执行：粗调等更久
-            rospy.sleep(1.2 if phase == "coarse" else 0.8)
+            rospy.sleep(0.3)
+            # rate.sleep()   #是否可以修改？
 
-    def move_z(self, delta_cm, tol_cm=15, timeout=15):
-        """z 方向上移动相对高度，delta_cm > 0 上升，< 0 下降，成功返回 True。"""
-        rate = rospy.Rate(10)
-        deadline = rospy.Time.now() + rospy.Duration(timeout)
-        stable_count = 0
-
-        # 尝试获取当前高度，拿不到则先发一次移动指令让无人机动起来
-        init_z = None
-        with self.state.lock:
-            if self.state.position is not None:
-                init_z = self.state.position.z * 100.0
-
-        if init_z is None:
-            # 盲发第一次指令，触发运动使 pose 数据出现
-            if delta_cm > 0:
-                self.up(min(abs(delta_cm), 20))
-            else:
-                self.down(min(abs(delta_cm), 20))
-            rospy.loginfo("move_z: sent initial command, waiting for pose...")
-            for _ in range(30):
-                rospy.sleep(0.5)
-                with self.state.lock:
-                    if self.state.position is not None:
-                        init_z = self.state.position.z * 100.0
-                        break
-
-        if init_z is None:
-            rospy.logerr("move_z: cannot get initial height")
-            return False
-
-        target_z = init_z + delta_cm
-        rospy.loginfo(f"move_z: delta={delta_cm} cm  (from {init_z:.1f} to {target_z:.1f} cm)")
-
-        while not rospy.is_shutdown():
-            if rospy.Time.now() > deadline:
-                rospy.logwarn(f"move_z timeout: delta={delta_cm} cm  target={target_z:.1f}")
-                return False
-
-            with self.state.lock:
-                if self.state.position is None:
-                    rate.sleep()
-                    continue
-                pz = self.state.position.z * 100.0
-
-            dz = target_z - pz
-            if abs(dz) < tol_cm:
-                stable_count += 1
-                if stable_count >= 3:
-                    rospy.loginfo(f"Reached height {pz:.1f} cm")
-                    self.stop()
-                    return True
-            else:
-                stable_count = 0
-
-            step = max(min(int(abs(dz) * 0.5), 50), 20)
-            if dz > 0:
-                self.up(step)
-            else:
-                self.down(step)
-            rospy.sleep(0.5)
-
-    def _map_world_axis(self, delta, yaw):
-        """根据 yaw 选择机体指令来逼近世界坐标轴移动。
-        返回 (cmd, step),cmd 为 'forward'/'back'/'left'/'right'。"""
-        yaw = self._normalize_180(yaw)
-        if -45 <= yaw <= 45:           # 机头朝 +X 附近
-            return ('forward' if delta > 0 else 'back')
-        elif 45 < yaw <= 135:          # 机头朝 +Y 附近
-            return ('right' if delta > 0 else 'left')
-        elif yaw > 135 or yaw < -135:  # 机头朝 -X 附近
-            return ('back' if delta > 0 else 'forward')
-        else:                          # -135 <= yaw < -45，机头朝 -Y 附近
-            return ('left' if delta > 0 else 'right')
-
-    def _yaw_map_cmd(self, cmd, step):
-        if cmd == 'forward':   self.forward(step)
-        elif cmd == 'back':    self.back(step)
-        elif cmd == 'left':    self.left(step)
-        elif cmd == 'right':   self.right(step)
-
-    def move_x(self, delta_cm, tol_cm=20, timeout=15):
-        """x 方向上水平移动相对距离（世界坐标系），delta_cm > 0 向 +x 方向，成功返回 True。"""
-        rate = rospy.Rate(10)
-        deadline = rospy.Time.now() + rospy.Duration(timeout)
-        stable_count = 0
-
-        init_x = None
-        with self.state.lock:
-            if self.state.position is not None:
-                init_x = self.state.position.x * 100.0
-
-        if init_x is None:
-            if delta_cm > 0:
-                self.right(min(abs(delta_cm), 30))
-            else:
-                self.left(min(abs(delta_cm), 30))
-            rospy.loginfo("move_x: sent initial command, waiting for pose...")
-            for _ in range(30):
-                rospy.sleep(0.5)
-                with self.state.lock:
-                    if self.state.position is not None:
-                        init_x = self.state.position.x * 100.0
-                        break
-
-        if init_x is None:
-            rospy.logerr("move_x: cannot get initial position")
-            return False
-
-        target_x = init_x + delta_cm
-        rospy.loginfo(f"move_x: delta={delta_cm} cm  (from x={init_x:.1f} to x={target_x:.1f} cm)")
-
-        while not rospy.is_shutdown():
-            if rospy.Time.now() > deadline:
-                rospy.logwarn(f"move_x timeout: delta={delta_cm} cm  target_x={target_x:.1f}")
-                return False
-
-            with self.state.lock:
-                if self.state.position is None or self.state.yaw is None:
-                    rate.sleep()
-                    continue
-                px = self.state.position.x * 100.0
-                yaw = self.state.yaw
-
-            dx = target_x - px
-            if abs(dx) < tol_cm:
-                stable_count += 1
-                if stable_count >= 3:
-                    rospy.loginfo(f"Reached x={px:.1f} cm")
-                    self.stop()
-                    return True
-            else:
-                stable_count = 0
-
-            step = max(min(int(abs(dx) * 0.4), 30), 20)
-            cmd = self._map_world_axis(dx, yaw)
-            self._yaw_map_cmd(cmd, step)
-            rospy.sleep(max(step / 20.0, 0.5))
-
-    def move_y(self, delta_cm, tol_cm=20, timeout=15):
-        """y 方向上水平移动相对距离（世界坐标系），delta_cm > 0 向 +y 方向，成功返回 True。"""
-        rate = rospy.Rate(10)
-        deadline = rospy.Time.now() + rospy.Duration(timeout)
-        stable_count = 0
-
-        init_y = None
-        with self.state.lock:
-            if self.state.position is not None:
-                init_y = self.state.position.y * 100.0
-
-        if init_y is None:
-            if delta_cm > 0:
-                self.forward(min(abs(delta_cm), 30))
-            else:
-                self.back(min(abs(delta_cm), 30))
-            rospy.loginfo("move_y: sent initial command, waiting for pose...")
-            for _ in range(30):
-                rospy.sleep(0.5)
-                with self.state.lock:
-                    if self.state.position is not None:
-                        init_y = self.state.position.y * 100.0
-                        break
-
-        if init_y is None:
-            rospy.logerr("move_y: cannot get initial position")
-            return False
-
-        target_y = init_y + delta_cm
-        rospy.loginfo(f"move_y: delta={delta_cm} cm  (from y={init_y:.1f} to y={target_y:.1f} cm)")
-
-        while not rospy.is_shutdown():
-            if rospy.Time.now() > deadline:
-                rospy.logwarn(f"move_y timeout: delta={delta_cm} cm  target_y={target_y:.1f}")
-                return False
-
-            with self.state.lock:
-                if self.state.position is None or self.state.yaw is None:
-                    rate.sleep()
-                    continue
-                py = self.state.position.y * 100.0
-                yaw = self.state.yaw
-
-            dy = target_y - py
-            if abs(dy) < tol_cm:
-                stable_count += 1
-                if stable_count >= 3:
-                    rospy.loginfo(f"Reached y={py:.1f} cm")
-                    self.stop()
-                    return True
-            else:
-                stable_count = 0
-
-            step = max(min(int(abs(dy) * 0.4), 30), 20)
-            # y 轴映射：在 x 轴基础上偏移 90°
-            yaw_shifted = yaw - 90
-            cmd = self._map_world_axis(dy, yaw_shifted)
-            self._yaw_map_cmd(cmd, step)
-            rospy.sleep(max(step / 20.0, 0.5))
-
-    def set_z(self, target_cm, tol_cm=20, timeout=15):
-        """飞到指定绝对高度 target_cm（cm），成功返回 True。"""
-        rate = rospy.Rate(10)
-        deadline = rospy.Time.now() + rospy.Duration(timeout)
-        stable_count = 0
-
-        init_z = None
-        for _ in range(30):
-            with self.state.lock:
-                if self.state.position is not None:
-                    init_z = self.state.position.z * 100.0
-                    break
-            rospy.sleep(0.2)
-
-        if init_z is None:
-            rospy.logerr("set_z: cannot get current height")
-            return False
-
-        rospy.loginfo(f"set_z: target={target_cm:.1f} cm  (current={init_z:.1f} cm)")
-
-        while not rospy.is_shutdown():
-            if rospy.Time.now() > deadline:
-                rospy.logwarn(f"set_z timeout: target={target_cm:.1f} cm")
-                return False
-
-            with self.state.lock:
-                if self.state.position is None:
-                    rate.sleep()
-                    continue
-                pz = self.state.position.z * 100.0
-
-            dz = target_cm - pz
-            if abs(dz) < tol_cm:
-                stable_count += 1
-                if stable_count >= 3:
-                    rospy.loginfo(f"set_z done: {pz:.1f} cm")
-                    self.stop()
-                    return True
-            else:
-                stable_count = 0
-
-            step = max(min(int(abs(dz) * 0.5), 50), 20)
-            if dz > 0:
-                self.up(step)
-            else:
-                self.down(step)
-            rospy.sleep(0.5)
+    def position_change(self, x, y, z, yaw):
+        self.target_x = x
+        self.target_y = y
+        self.target_z = z
+        self.target_yaw = yaw
 
     # ========== 视觉检测方法 ==========
     def detect_ball_color(self):
@@ -458,43 +227,48 @@ class TelloControl:
                 return None
             rospy.sleep(0.5)
 
-    def detect_fire(self):
+    def detect_fire(self, timeout = 3):
         """检测图像中是否存在红色圆形（火窗标记），返回 True/False"""
-        if self.state.image is None:
-            rospy.logwarn("No image received yet")
-            return False
-
-        frame = self.state.image.copy()
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-
-        lower_red1 = np.array([0, 100, 100])
-        upper_red1 = np.array([10, 255, 255])
-        lower_red2 = np.array([160, 100, 100])
-        upper_red2 = np.array([180, 255, 255])
-
-        mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
-        mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
-        mask = cv2.bitwise_or(mask1, mask2)
-
-        kernel = np.ones((5, 5), dtype=np.uint8)
-        mask = cv2.erode(mask, kernel, iterations=1)
-        mask = cv2.dilate(mask, kernel, iterations=2)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if area < 30:
+        start = rospy.Time.now()
+        while not rospy.is_shutdown():
+            if self.state.image is None:
+                rospy.sleep(0.5)
+                if (rospy.Time.now() - start).to_sec() > timeout:
+                    return False
                 continue
-            (x_center, y_center), radius = cv2.minEnclosingCircle(cnt)
-            if radius == 0:
-                continue
-            circularity = area / (math.pi * radius * radius)
-            if circularity > 0.7:
-                rospy.loginfo("Fire window detected!")
-                return True
-        return False
+
+            frame = self.state.image.copy()
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+            lower_red1 = np.array([0, 100, 100])
+            upper_red1 = np.array([10, 255, 255])
+            lower_red2 = np.array([160, 100, 100])
+            upper_red2 = np.array([180, 255, 255])
+
+            mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+            mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+            mask = cv2.bitwise_or(mask1, mask2)
+
+            kernel = np.ones((5, 5), dtype=np.uint8)
+            mask = cv2.erode(mask, kernel, iterations=1)
+            mask = cv2.dilate(mask, kernel, iterations=2)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                if area < 30:
+                    continue
+                (x_center, y_center), radius = cv2.minEnclosingCircle(cnt)
+                if radius == 0:
+                    continue
+                circularity = area / (math.pi * radius * radius)
+                if circularity > 0.7:
+                    rospy.loginfo("Fire window detected!")
+                    return True
+            if(rospy.Time.now() - start).to_sec() > timeout:
+                return False
 
     # 白板上 3×3 个目标点的世界坐标 (x, z)，y=220 恒定
     # 左上为原点，x 右为正，z 下为正（世界坐标系中 z↓ 即高度↓）
@@ -504,33 +278,51 @@ class TelloControl:
         (-75, 75), (0, 75), (75, 75),
     ]
 
-    def detect_whiteboard_corners(self):
+    def detect_whiteboard_corners(self, timeout=5):
         """
         检测白板区域，返回四个角点的像素坐标 [左上,右上,右下,左下]
-        世界坐标：左上(-75,150) 右上(75,150) 右下(75,75) 左下(-75,75)
+        超时时间 timeout 秒，超时返回 None
         """
-        if self.state.image is None:
-            return None
-        frame = self.state.image.copy()
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not contours:
-            return None
-        max_contour = max(contours, key=cv2.contourArea)
-        peri = cv2.arcLength(max_contour, True)
-        approx = cv2.approxPolyDP(max_contour, 0.02 * peri, True)
-        if len(approx) != 4:
-            hull = cv2.convexHull(max_contour)
-            approx = cv2.approxPolyDP(hull, 0.02 * peri, True)
+        start = rospy.Time.now()
+        while not rospy.is_shutdown():
+            if self.state.image is None:
+                rospy.sleep(0.5)
+                if (rospy.Time.now() - start).to_sec() > timeout:
+                    return None
+                continue
+
+            frame = self.state.image.copy()
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
+            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if not contours:
+                rospy.sleep(0.5)
+                if (rospy.Time.now() - start).to_sec() > timeout:
+                    return None
+                continue
+
+            max_contour = max(contours, key=cv2.contourArea)
+            peri = cv2.arcLength(max_contour, True)
+            approx = cv2.approxPolyDP(max_contour, 0.02 * peri, True)
             if len(approx) != 4:
-                return None
-        pts = approx.reshape(4, 2)
-        pts_sorted = sorted(pts, key=lambda p: (p[1], p[0]))
-        top_pts = sorted(pts_sorted[:2], key=lambda p: p[0])          # [TL, TR]
-        bottom_pts = sorted(pts_sorted[2:], key=lambda p: -p[0])      # [BR, BL]，x 降序
-        corners = top_pts + bottom_pts                                 # [TL, TR, BR, BL]
-        return np.array(corners, dtype='float32')
+                hull = cv2.convexHull(max_contour)
+                approx = cv2.approxPolyDP(hull, 0.02 * peri, True)
+                if len(approx) != 4:
+                    rospy.sleep(0.5)
+                    if (rospy.Time.now() - start).to_sec() > timeout:
+                        return None
+                    continue
+
+            pts = approx.reshape(4, 2)
+            pts_sorted = sorted(pts, key=lambda p: (p[1], p[0]))
+            top_pts = sorted(pts_sorted[:2], key=lambda p: p[0])          # [TL, TR]
+            bottom_pts = sorted(pts_sorted[2:], key=lambda p: -p[0])      # [BR, BL]
+            corners = top_pts + bottom_pts                                 # [TL, TR, BR, BL]
+            return np.array(corners, dtype='float32')
+        
+
+
+        return None
 
     def pixel_to_world(self, u, v, corners):
         """将像素坐标 (u,v) 映射到世界坐标 (x,z)（白板平面 y=220），并吸附到最近的目标点。"""
@@ -554,36 +346,114 @@ class TelloControl:
         best = min(self.WHITEBOARD_TARGETS, key=lambda p: (p[0] - x)**2 + (p[1] - z)**2)
         return best[0], best[1]
 
-    def detect_red_light(self, board_corners=None):
-        """检测图像中的红色光点，返回像素坐标 (u, v) 或 None。可传入 board_corners 过滤板外噪点。"""
-        if self.state.image is None:
-            return None
-        frame = self.state.image.copy()
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        lower_red1 = np.array([0, 56, 244])
-        upper_red1 = np.array([179, 124, 255])
-        mask = cv2.inRange(hsv, lower_red1, upper_red1)
-        kernel = np.ones((5, 5), dtype=np.uint8)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        max_area = 0
-        best_cnt = None
-        for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if area <= max_area:
+    def detect_red_light(self, board_corners=None, min_area=10, min_circularity=0.7, timeout=5):
+        """
+        检测图像中的红色光点，返回像素坐标 (u, v) 或 None
+        超时时间 timeout 秒，超时返回 None
+        """
+        
+        start = rospy.Time.now()
+        
+        while not rospy.is_shutdown():
+            if self.state.image is None:
+                rospy.sleep(0.5)
+                if (rospy.Time.now() - start).to_sec() > timeout:
+                    return None
                 continue
-            M = cv2.moments(cnt)
-            if M["m00"] == 0:
+
+            frame = self.state.image.copy()
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            lower_red1 = np.array([0, 10, 40])
+            upper_red1 = np.array([20, 255, 255])
+            lower_red2 = np.array([150, 10, 40])
+            upper_red2 = np.array([180, 255, 255])
+            mask = cv2.bitwise_or(
+                cv2.inRange(hsv, lower_red1, upper_red1),
+                cv2.inRange(hsv, lower_red2, upper_red2)
+            )
+
+            if cv2.countNonZero(mask) < min_area:
+                rospy.sleep(0.5)
+                if (rospy.Time.now() - start).to_sec() > timeout:
+                    return None
                 continue
-            u = int(M["m10"] / M["m00"])
-            v = int(M["m01"] / M["m00"])
+
+            kernel = np.ones((5, 5), dtype=np.uint8)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            try:
+                cv2.imshow("red_mask", mask)
+                cv2.waitKey(1)
+            except cv2.error:
+                pass
+
+            best_score = -1
+            best_uv = None
+            max_area = 500
+            hull = None
             if board_corners is not None:
-                inside = cv2.pointPolygonTest(board_corners, (float(u), float(v)), False)
-                if inside < 0:
+                hull = cv2.convexHull(board_corners.astype(np.float32))
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                if area < min_area or area > max_area:
                     continue
-            max_area = area
-            best_cnt = cnt
-            best_uv = (u, v)
-        if best_cnt is not None:
-            return best_uv
+                peri = cv2.arcLength(cnt, True)
+                if peri == 0:
+                    continue
+                circularity = 4 * math.pi * area / (peri * peri)
+                if circularity < min_circularity:
+                    continue
+
+                M = cv2.moments(cnt)
+                if M["m00"] == 0:
+                    continue
+                u = int(M["m10"] / M["m00"])
+                v = int(M["m01"] / M["m00"])
+
+                if hull is not None:
+                    inside_dist = cv2.pointPolygonTest(hull, (float(u), float(v)), True)
+                    if inside_dist < 10:
+                        continue
+
+                # 评分：圆形度权重高，面积辅助
+                score = circularity * 1000 + area
+                if score > best_score:
+                    best_score = score
+                    best_uv = (u, v)
+
+            if best_uv is not None:
+                return best_uv
+
+            rospy.sleep(0.5)
+            if (rospy.Time.now() - start).to_sec() > timeout:
+                rospy.loginfo("detect light timeout!")
+                break
+
         return None
+    
+
+
+
+    def save_image(self, filename_prefix="capture"):
+        """保存当前图像到 U 盘主目录下的 saved_images 文件夹"""
+        if self.state.image is None:
+            rospy.logwarn("No image to save")
+            return None
+    
+        # 获取 U 盘当前工作目录的根目录（或使用环境变量）
+        # 假设 U 盘挂载在 /media 或当前目录就是 U 盘根目录
+        usb_root = os.path.expanduser("~")  # 如果当前用户目录就是 U 盘根目录
+        # 或者使用 os.getcwd() 获取当前工作目录（通常也是 U 盘内）
+        save_dir = os.path.join(usb_root, "saved_images")
+    
+        # 若不存在则创建
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+    
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        filename = f"{filename_prefix}_{timestamp}.jpg"
+        filepath = os.path.join(save_dir, filename)
+    
+        cv2.imwrite(filepath, self.state.image)
+        rospy.loginfo(f"Image saved to {filepath}")
+        return filepath

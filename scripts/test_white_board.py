@@ -2,11 +2,12 @@
 # -*- coding: utf-8 -*-
 """
 离线测试脚本：输入手机拍的横向白板图片，检测白板轮廓和红色灯位置。
-输出：白板 2D 坐标 + 三维世界坐标。
+输出：白板 2D 坐标 + 三维世界坐标，结果图保存为 <原图名>_result.jpg
 用法：python test_white_board.py <图片路径>
 """
 
 import cv2
+import math
 import numpy as np
 import sys
 
@@ -23,6 +24,10 @@ WORLD_3D_POINTS = [
     (-75, 112.5), (0, 112.5), (75, 112.5),
     (-75, 75), (0, 75), (75, 75),
 ]
+
+# HSV 阈值（与 Tello.py 保持一致）
+HSV_LOWER = np.array([0, 56, 244])
+HSV_UPPER = np.array([179, 124, 255])
 
 
 def detect_whiteboard_corners(gray):
@@ -47,12 +52,15 @@ def detect_whiteboard_corners(gray):
     return np.array(corners, dtype='float32')
 
 
-def detect_red_lights(bgr, board_corners=None):
+def detect_red_lights(bgr, board_corners=None, min_area=10, min_circularity=0.4):
     """检测红色光点，返回像素坐标列表 [(u, v), ...]。可传入 board_corners 过滤板外噪点。"""
     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-    lower_red1 = np.array([0, 56, 244])
-    upper_red1 = np.array([179, 124, 255])
-    mask = cv2.inRange(hsv, lower_red1, upper_red1)
+    mask = cv2.inRange(hsv, HSV_LOWER, HSV_UPPER)
+
+    # 没有足够红色像素则直接放弃（与 Tello.py 一致）
+    if cv2.countNonZero(mask) < min_area:
+        return []
+
     kernel = np.ones((5, 5), dtype=np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -60,8 +68,17 @@ def detect_red_lights(bgr, board_corners=None):
     lights = []
     for cnt in contours:
         area = cv2.contourArea(cnt)
-        if area < 30:
+        if area < min_area:
             continue
+
+        # 圆形度过滤：防止不规则形状的误检（与 Tello.py 一致）
+        peri = cv2.arcLength(cnt, True)
+        if peri == 0:
+            continue
+        circularity = 4 * math.pi * area / (peri * peri)
+        if circularity < min_circularity:
+            continue
+
         M = cv2.moments(cnt)
         if M["m00"] != 0:
             u = int(M["m10"] / M["m00"])
@@ -110,7 +127,6 @@ def cluster_lights(lights, pixel_dist=80):
     if n <= 1:
         return []
 
-    # 邻接表：距离 < pixel_dist 视为相邻
     adj = [[] for _ in range(n)]
     for i in range(n):
         for j in range(i + 1, n):
@@ -119,7 +135,6 @@ def cluster_lights(lights, pixel_dist=80):
                 adj[i].append(j)
                 adj[j].append(i)
 
-    # DFS 找连通分量
     visited = [False] * n
     clusters = []
     for i in range(n):
@@ -136,7 +151,6 @@ def cluster_lights(lights, pixel_dist=80):
                         stack.append(nb)
             clusters.append(comp)
 
-    # 优先返回点数最多的簇；若不存在 ≥2 的簇则返回空（全视为噪点）
     best = max(clusters, key=len)
     return best if len(best) >= 2 else []
 
@@ -160,8 +174,9 @@ def main():
     corners = detect_whiteboard_corners(gray)
     if corners is None:
         print("未检测到白板轮廓")
-        cv2.imshow("Result", bgr)
-        cv2.waitKey(0)
+        out_path = img_path.rsplit(".", 1)[0] + "_result.jpg"
+        cv2.imwrite(out_path, bgr)
+        print(f"结果已保存: {out_path}")
         return
 
     print("检测到白板轮廓")
@@ -223,19 +238,11 @@ def main():
     if not lights:
         print("  (未检测到红灯)")
 
+    # 保存结果图片
+    out_path = img_path.rsplit(".", 1)[0] + "_result.jpg"
+    cv2.imwrite(out_path, bgr)
     print("\n" + "=" * 55)
-    print("按任意键关闭窗口...")
-
-    # 缩放显示
-    h, w = bgr.shape[:2]
-    scale = min(1200 / max(w, 1), 800 / max(h, 1), 1.0)
-    if scale < 1.0:
-        display = cv2.resize(bgr, (int(w * scale), int(h * scale)))
-    else:
-        display = bgr
-    cv2.imshow("Whiteboard Detection | White=Board  Red=Light", display)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    print(f"结果已保存: {out_path}")
 
 
 if __name__ == "__main__":
