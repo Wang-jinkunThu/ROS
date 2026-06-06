@@ -282,9 +282,10 @@ class TelloControl:
     TEMPLATE_PATHS = {
         "EMPTY":     ["template/EMPTY_1.png", "template/EMPTY_2.png"],
         "LIGHT_ON":  ["template/LIGHT_ON_1.png", "template/LIGHT_ON_2.png"],
-        "LIGHT_OFF": ["template/LIGHT_OFF_1.png", "template/LIGHT_OFF_2.png", "template/LIGHT_OFF_3.png", "template/LIGHT_OFF_4.png"],
+        "LIGHT_OFF": ["template/LIGHT_OFF_1.png", "template/LIGHT_OFF_2.png", 
+                      "template/LIGHT_OFF_3.png", "template/LIGHT_OFF_4.png"],
     }
-    TEMPLATE_THRESHOLD = 0.8
+    TEMPLATE_THRESHOLD = 0.75
 
     def _match_templates(self, gray):
         """匹配所有模板类型，返回 [(x, y, confidence, type), ...]，已做跨类型 NMS"""
@@ -327,10 +328,12 @@ class TelloControl:
 
             frame = self.state.image.copy()
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            os.makedirs("./image", exist_ok=True)
+            timestamp = time.strftime("%H%M%S")
             cv2.imwrite(f"./image/gray_{timestamp}.jpg", gray)
 
             matches = self._match_templates(gray)
+            rospy.loginfo(f"Detected {len(matches)} template matches")
 
             # 期望检测到 9 个格子点，允许少量误差
             if len(matches) < 7:
