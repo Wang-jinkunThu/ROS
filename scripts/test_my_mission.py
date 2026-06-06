@@ -242,50 +242,25 @@ class StateMachine:
 
         rospy.sleep(1)
 
-        # 检测白板角点
-        rospy.loginfo("Detecting whiteboard corners...")
-        corners = None
-        deadline = rospy.Time.now() + rospy.Duration(30)
-        while corners is None and not rospy.is_shutdown():
-            corners = self.uav.detect_whiteboard_corners()
-            if rospy.Time.now() > deadline:
-                break
-            rospy.sleep(0.5)
-
-        if corners is None:
-            rospy.logerr("Cannot detect whiteboard corners")
+        # 模板匹配检测白板 3×3 网格，获取 LIGHT_ON 的世界坐标
+        rospy.loginfo("Detecting whiteboard grid via template matching...")
+        result = self.uav.detect_whiteboard_light(timeout=15)
+        if result is None:
+            rospy.logerr("Cannot detect whiteboard LIGHT_ON")
             self.state = "LANDING"
             return
 
-        rospy.loginfo("Whiteboard corners detected")
-
-        # 检测红灯
-        rospy.loginfo("Detecting red light...")
-        pixel = None
-        deadline = rospy.Time.now() + rospy.Duration(30)
-        while pixel is None and not rospy.is_shutdown():
-            pixel = self.uav.detect_red_light(corners)
-            if rospy.Time.now() > deadline:
-                break
-            rospy.sleep(0.5)
-
-        if pixel is None:
-            rospy.logerr("No red light detected")
-            self.state = "LANDING"
-            return
-
-        # 像素坐标 → 世界坐标
-        x_world, z_world = self.uav.pixel_to_world(pixel[0], pixel[1], corners)
-        rospy.loginfo(f"Red light world position: x={x_world:.1f}, z={z_world:.1f}")
+        target_x, target_y, target_z = result
+        rospy.loginfo(f"LIGHT_ON target: x={target_x:.1f}, y={target_y:.1f}, z={target_z:.1f}")
 
         # 飞向目标位置
-        rospy.loginfo(f"Going to target ({x_world:.1f}, 50)...")
-        if not self.uav.goto_xy(x_world, 50):
+        rospy.loginfo(f"Going to target ({target_x:.1f}, {target_y:.1f}, {target_z:.1f})...")
+        if not self.uav.goto_xy(target_x, target_y):
             rospy.logerr("Failed to reach target position")
             self.state = "LANDING"
             return
 
-        if not self.uav.set_z(z_world):
+        if not self.uav.set_z(target_z):
             rospy.logerr("Failed to set target height")
             self.state = "LANDING"
             return

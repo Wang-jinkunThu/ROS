@@ -270,18 +270,52 @@ class TelloControl:
             if(rospy.Time.now() - start).to_sec() > timeout:
                 return False
 
-    # 白板上 3×3 个目标点的世界坐标 (x, z)，y=220 恒定
-    # 左上为原点，x 右为正，z 下为正（世界坐标系中 z↓ 即高度↓）
+    # 白板上 3×3 个目标点的三维世界坐标 (x, y, z)（前方区域)
+    # 按行优先排列：第一行从左到右，第二行，第三行
     WHITEBOARD_TARGETS = [
-        (-75, 150), (0, 150), (75, 150),
-        (-75, 112.5), (0, 112.5), (75, 112.5),
-        (-75, 75), (0, 75), (75, 75),
+        (-75, 220, 150), (0, 220, 150), (75, 220, 150),
+        (-75, 220, 112.5), (0, 220, 112.5), (75, 220, 112.5),
+        (-75, 220, 75), (0, 220, 75), (75, 220, 75),
     ]
 
-    def detect_whiteboard_corners(self, timeout=5):
+    # 模板匹配配置：类型 → 模板路径列表
+    TEMPLATE_PATHS = {
+        "EMPTY":     ["template/EMPTY_1.png", "template/EMPTY_2.png"],
+        "LIGHT_ON":  ["template/LIGHT_ON.png"],
+        "LIGHT_OFF": ["template/LIGHT_OFF_1.png", "template/LIGHT_OFF_2.png", "template/LIGHT_OFF_3.png"],
+    }
+    TEMPLATE_THRESHOLD = 0.8
+
+    def _match_templates(self, gray):
+        """匹配所有模板类型，返回 [(x, y, confidence, type), ...]，已做跨类型 NMS"""
+        all_matches = []
+        for ttype, paths in self.TEMPLATE_PATHS.items():
+            for path in paths:
+                tmpl = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+                if tmpl is None:
+                    continue
+                th, tw = tmpl.shape
+                result = cv2.matchTemplate(gray, tmpl, cv2.TM_CCOEFF_NORMED)
+                ys, xs = np.where(result >= self.TEMPLATE_THRESHOLD)
+                for x, y in zip(xs, ys):
+                    all_matches.append((x, y, float(result[y, x]), ttype, tw, th))
+
+        if not all_matches:
+            return []
+
+        # 按置信度降序，跨类型 NMS
+        all_matches.sort(key=lambda m: -m[2])
+        min_dist = min(min(m[4], m[5]) for m in all_matches) // 2
+        keep = []
+        for m in all_matches:
+            if all(np.hypot(m[0] - k[0], m[1] - k[1]) > min_dist for k in keep):
+                keep.append(m)
+        return keep
+
+    def detect_whiteboard_light(self, timeout=5):
         """
-        检测白板区域，返回四个角点的像素坐标 [左上,右上,右下,左下]
-        超时时间 timeout 秒，超时返回 None
+        模板匹配检测白板 3×3 网格，返回 LIGHT_ON 对应的世界坐标 (x, z)。
+        检测不到返回 None。
         """
         start = rospy.Time.now()
         while not rospy.is_shutdown():
@@ -293,145 +327,30 @@ class TelloControl:
 
             frame = self.state.image.copy()
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
-            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if not contours:
+            matches = self._match_templates(gray)
+
+            # 期望检测到 9 个格子点，允许少量误差
+            if len(matches) < 7:
                 rospy.sleep(0.5)
                 if (rospy.Time.now() - start).to_sec() > timeout:
                     return None
                 continue
 
-            max_contour = max(contours, key=cv2.contourArea)
-            peri = cv2.arcLength(max_contour, True)
-            approx = cv2.approxPolyDP(max_contour, 0.02 * peri, True)
-            if len(approx) != 4:
-                hull = cv2.convexHull(max_contour)
-                approx = cv2.approxPolyDP(hull, 0.02 * peri, True)
-                if len(approx) != 4:
-                    rospy.sleep(0.5)
-                    if (rospy.Time.now() - start).to_sec() > timeout:
-                        return None
-                    continue
+            # 若多于 9 个，取置信度最高的 9 个
+            best9 = sorted(matches, key=lambda m: -m[2])[:9]
+            # 按像素位置排序：行优先（从上到下，从左到右），对应 WHITEBOARD_TARGETS
+            best9.sort(key=lambda m: (m[1], m[0]))  # (y, x)
 
-            pts = approx.reshape(4, 2)
-            pts_sorted = sorted(pts, key=lambda p: (p[1], p[0]))
-            top_pts = sorted(pts_sorted[:2], key=lambda p: p[0])          # [TL, TR]
-            bottom_pts = sorted(pts_sorted[2:], key=lambda p: -p[0])      # [BR, BL]
-            corners = top_pts + bottom_pts                                 # [TL, TR, BR, BL]
-            return np.array(corners, dtype='float32')
-        
+            for i, m in enumerate(best9):
+                if m[3] == "LIGHT_ON":
+                    world_x, world_y, world_z = self.WHITEBOARD_TARGETS[i]
+                    rospy.loginfo(f"Whiteboard LIGHT_ON at grid[{i}] → target ({world_x:.1f}, {world_y:.1f}, {world_z:.1f})")
+                    return (world_x, world_y, world_z)
 
+            rospy.logwarn("Whiteboard 3×3 detected but no LIGHT_ON found")
+            return None
 
         return None
-
-    def pixel_to_world(self, u, v, corners):
-        """将像素坐标 (u,v) 映射到世界坐标 (x,z)（白板平面 y=220），并吸附到最近的目标点。"""
-        world_pts = np.array([
-            [-75, 150],  # 左上
-            [75, 150],   # 右上
-            [75, 75],    # 右下
-            [-75, 75]    # 左下
-        ], dtype='float32')
-
-        H, _ = cv2.findHomography(corners, world_pts)
-        pixel = np.array([u, v, 1], dtype='float32').reshape(3, 1)
-        world = H @ pixel
-        world = world / world[2]
-        x = world[0, 0]
-        z = world[1, 0]
-        x = max(-75, min(75, x))
-        z = max(75, min(150, z))
-
-        # 吸附到最近的 3×3 网格点
-        best = min(self.WHITEBOARD_TARGETS, key=lambda p: (p[0] - x)**2 + (p[1] - z)**2)
-        return best[0], best[1]
-
-    def detect_red_light(self, board_corners=None, min_area=10, min_circularity=0.7, timeout=5):
-        """
-        检测图像中的红色光点，返回像素坐标 (u, v) 或 None
-        超时时间 timeout 秒，超时返回 None
-        """
-        
-        start = rospy.Time.now()
-        
-        while not rospy.is_shutdown():
-            if self.state.image is None:
-                rospy.sleep(0.5)
-                if (rospy.Time.now() - start).to_sec() > timeout:
-                    return None
-                continue
-
-            frame = self.state.image.copy()
-            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-            lower_red1 = np.array([0, 10, 40])
-            upper_red1 = np.array([20, 255, 255])
-            lower_red2 = np.array([150, 10, 40])
-            upper_red2 = np.array([180, 255, 255])
-            mask = cv2.bitwise_or(
-                cv2.inRange(hsv, lower_red1, upper_red1),
-                cv2.inRange(hsv, lower_red2, upper_red2)
-            )
-
-            if cv2.countNonZero(mask) < min_area:
-                rospy.sleep(0.5)
-                if (rospy.Time.now() - start).to_sec() > timeout:
-                    return None
-                continue
-
-            kernel = np.ones((5, 5), dtype=np.uint8)
-            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            try:
-                cv2.imshow("red_mask", mask)
-                cv2.waitKey(1)
-            except cv2.error:
-                pass
-
-            best_score = -1
-            best_uv = None
-            max_area = 500
-            hull = None
-            if board_corners is not None:
-                hull = cv2.convexHull(board_corners.astype(np.float32))
-            for cnt in contours:
-                area = cv2.contourArea(cnt)
-                if area < min_area or area > max_area:
-                    continue
-                peri = cv2.arcLength(cnt, True)
-                if peri == 0:
-                    continue
-                circularity = 4 * math.pi * area / (peri * peri)
-                if circularity < min_circularity:
-                    continue
-
-                M = cv2.moments(cnt)
-                if M["m00"] == 0:
-                    continue
-                u = int(M["m10"] / M["m00"])
-                v = int(M["m01"] / M["m00"])
-
-                if hull is not None:
-                    inside_dist = cv2.pointPolygonTest(hull, (float(u), float(v)), True)
-                    if inside_dist < 10:
-                        continue
-
-                # 评分：圆形度权重高，面积辅助
-                score = circularity * 1000 + area
-                if score > best_score:
-                    best_score = score
-                    best_uv = (u, v)
-
-            if best_uv is not None:
-                return best_uv
-
-            rospy.sleep(0.5)
-            if (rospy.Time.now() - start).to_sec() > timeout:
-                rospy.loginfo("detect light timeout!")
-                break
-
-        return None
-    
-
 
 
     def save_image(self, filename_prefix="capture"):
